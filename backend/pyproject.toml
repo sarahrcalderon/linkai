@@ -16,6 +16,7 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["testes"]
+python_files = ["test_*.py", "teste_*.py"]
 pythonpath = ["src"]
 
 [tool.ruff]
