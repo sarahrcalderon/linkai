@@ -2,6 +2,7 @@
 backend/.venv/
 backend/venv/
 .venv/
+.postgres-teste/
 venv/
 __pycache__/
 *.py[cod]
