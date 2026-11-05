@@ -1,0 +1,90 @@
+# Ambientes virtuais e arquivos do Python
+backend/.venv/
+backend/venv/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+
+# Testes, tipagem, lint e cobertura
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.hypothesis/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Artefatos de build e distribuição do Python
+build/
+dist/
+*.egg-info/
+*.egg
+pip-wheel-metadata/
+*.whl
+
+# Dependências e artefatos do frontend
+node_modules/
+frontend/dist/
+frontend/.vite/
+.vite/
+*.tsbuildinfo
+
+# Logs e arquivos temporários de gerenciadores de pacotes
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+*.log
+.npm/
+.yarn/
+.pnpm-store/
+
+# Variáveis de ambiente e credenciais
+.env
+.env.*
+!.env.example
+!.env.exemplo
+*.secret
+*.secrets
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+id_rsa
+id_rsa.pub
+
+# Sistemas operacionais
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+lost+found/
+
+# Configurações locais de IDEs e ferramentas de desenvolvedor
+.idea/workspace.xml
+.idea/**/workspace.xml
+.idea/**/shelf/
+.idea/**/httpRequests/
+.idea/**/dataSources/
+.vscode/*.local.json
+.vscode/*.user.json
+.vscode/*.code-workspace
+
+# Arquivos temporários comuns
+*.tmp
+*.temp
+*.swp
+*.swo
+*.bak
+*.orig
