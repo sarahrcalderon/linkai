@@ -10,7 +10,7 @@ function obterTemaInicial(): Tema {
     : 'claro';
 }
 
-export function usarTema() {
+function useTema() {
   const [tema, definirTema] = useState<Tema>(obterTemaInicial);
 
   useEffect(() => {
@@ -20,3 +20,5 @@ export function usarTema() {
 
   return { tema, alternarTema: () => definirTema(tema === 'claro' ? 'escuro' : 'claro') };
 }
+
+export const usarTema = useTema;
