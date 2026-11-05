@@ -339,3 +339,132 @@ frontend. O README contém os comandos completos e o contrato HTTP/CSRF.
 
 Commit sugerido: `feat: implementar autenticacao e sessoes`.
 Nenhum commit, push, deploy ou alteração em produção foi realizado.
+
+## Etapa 3.4 — Integração de autenticação com React (05/11/2026)
+
+### Análise e escopo
+
+Revisados o frontend React/TypeScript/Vite, componentes e temas da Fase 2,
+contratos de cadastro/login/logout/me, CORS e CSRF da Etapa 3.3 antes das alterações.
+O frontend tinha somente página inicial, componentes e cinco testes, sem rotas
+ou estado de autenticação. A API já atendia ao fluxo e não precisou de alteração.
+A implementação ficou exclusivamente na 3.4, sem publicação, Brevo, dashboard
+analítico, Etapa 3.5 ou Fase 4.
+
+### Arquitetura e comportamento
+
+- `servicos/http.ts`: fetch central com credentials include, URL por VITE_URL_API,
+  limite de 15s, verificação de status esperado, erros tipados e mensagens de rede.
+- `funcionalidades/autenticacao/`: tipos, serviço dos quatro endpoints, validações,
+  gerenciador de sessão, contexto, provedor e hooks. Senha não é guardada no estado
+  da aplicação; o formulário lê FormData e limpa o campo após a requisição.
+- O gerenciador mantém usuário e CSRF exclusivamente em memória, consulta /me ao
+  iniciar e deduplica consultas, inclusive durante StrictMode. Distingue carregando,
+  autenticado, não autenticado e indisponível. A API continua autorizando cada chamada.
+- Versões de operações ignoram consultas antigas após login/logout; mutações são
+  bloqueadas enquanto outra está pendente. Consultas não começam durante mutações.
+- Revalidação no retorno à aba/foco é limitada a uma por minuto, somente se havia
+  autenticação confirmada. Botão Atualizar sessão força consulta. Não há polling.
+- `navegacao/`: quatro caminhos com History API, links internos preservando abertura
+  em outra aba, rota privada, redirecionamento e página não encontrada. Sem nova dependência.
+- `Aplicacao.tsx` contém somente composição. Páginas e componentes guardam responsabilidades
+  próprias, com layout e feedback reutilizáveis. O dashboard privado mostra somente conta
+  e controles de sessão. A prévia pública com dados fictícios foi preservada.
+- Cadastro aceita somente 202 e apresenta a mensagem uniforme da API; não consulta
+  existência de conta, não autentica nem simula envio de e-mail.
+- Login valida o contrato de sucesso em runtime, inclusive email_verificado=true
+  e CSRF hexadecimal de 64 caracteres. HTTP rejeitado nunca vira sessão autenticada.
+- Logout inclui o CSRF no cabeçalho, sem lê-lo de cookies ou gravá-lo em storage.
+  Falhas de logout preservam a sessão; 401 em consulta encerra o estado local.
+- Labels, autocomplete, senha mascarada, erros associados com aria-describedby,
+  aria-invalid, feedback de status/alerta, foco, loading e bloqueio síncrono de envios.
+  Layout com largura fluida, campos min-width:0 e controles com quebra de linha.
+
+### Arquivos criados
+
+Relativos a `frontend/`:
+
+- `.env.exemplo`, `.prettierignore`, `src/vite-env.d.ts` e `src/Aplicacao.tsx`.
+- `src/servicos/http.ts`.
+- `src/funcionalidades/autenticacao/tipos.ts`, `servico.ts`, `gerenciador.ts`,
+  `contexto.ts`, `ProvedorAutenticacao.tsx`, `usarAutenticacao.ts`,
+  `validacao.ts` e `usarFormularioAutenticacao.ts`.
+- `src/navegacao/usarNavegacao.ts` e `RotasAplicacao.tsx`.
+- `src/componentes/EstruturaAcesso.tsx`, `Feedback.tsx`, `FormularioAutenticacao.tsx`
+  e `LinkInterno.tsx`.
+- `src/paginas/PaginaCadastro.tsx`, `PaginaLogin.tsx` e `PaginaDashboard.tsx`.
+- `src/testes/Autenticacao.test.tsx`, `GerenciadorAutenticacao.test.ts` e
+  `ServicoHTTP.test.ts`.
+
+### Arquivos modificados
+
+- `frontend/src/principal.tsx`: composição da aplicação.
+- `frontend/src/paginas/PaginaInicial.tsx`: links funcionais para cadastro/login.
+- `frontend/src/componentes/Cabecalho.tsx`: navegação ao início da aplicação.
+- `frontend/src/estilos/globais.css`: campos fluidos e foco de links.
+- `frontend/src/testes/configuracao.ts`: cleanup explícito entre testes.
+- `frontend/.prettierrc.json`, `src/componentes/Botao.tsx`, `CampoTexto.tsx`,
+  `GraficoCliques.tsx`, `src/funcionalidades/tema/usarTema.ts` e os três arquivos
+  tsconfig JSON: somente formatação para atender ao Prettier já configurado.
+- `README.md` e este relatório: fluxos, ambiente, contratos, validação e limitações.
+
+Nenhuma dependência, endpoint, migração ou implementação backend foi alterada.
+Artefatos gerados de TypeScript não fazem parte da entrega.
+
+### Testes e resultados observados
+
+- Frontend: **29 testes aprovados** em cinco arquivos, incluindo os cinco existentes.
+- Cadastro válido normalizado e 202 sem autenticar; validação acessível e foco;
+  envio simultâneo bloqueado; loading; falha de rede; erros HTTP por campo.
+- Login válido redireciona; senha inválida e conta não verificada têm rejeição
+  genérica; resposta de sucesso malformada ou com conta não verificada é recusada;
+  429 apresentado sem simular acesso.
+- Inicialização única em StrictMode; dashboard não aparece antes da confirmação;
+  visitante redirecionado; indisponibilidade com nova tentativa; sessão expirada
+  remove a área privada; logout envia cookies/CSRF, limpa após 204 e preserva após 503.
+- Consulta tardia não restaura sessão após logout; consultas durante mutação não
+  são disparadas; inicialização tardia não desfaz login; rejeição durante consulta
+  inicial não deixa carregamento permanente; deduplicação e intervalo de foco verificados.
+- Serviço HTTP rejeita outro 2xx no lugar do 202, JSON inválido e aborta em 15s.
+- Tema alternado e preservado; storage contém somente tema, sem CSRF ou credenciais.
+- ESLint, `npm run build` (inclui TypeScript) e `npm run format:check`: aprovados.
+- Backend com URL_BANCO_TESTE em PostgreSQL **18.6** real: **103 aprovados, 1 ignorado**,
+  preservando cadastro, sessões, migrações e transações. O ignorado permanece a
+  variante SQLite da concorrência da 3.1. `ruff check .` e `ruff format --check .` aprovados.
+
+### Problemas encontrados e limites
+
+- Hooks precisam do prefixo use para o ESLint; implementação usa esse prefixo e
+  exporta os nomes portugueses usar*, seguindo o padrão do hook de tema existente.
+- Prettier existente apontou arquivos antigos sem formatação e tentou incluir dist.
+  Adicionado ignore de artefatos e aplicada somente formatação nos arquivos antigos.
+- O teste de timeout encontrou DOMException que não satisfazia instanceof Error
+  no ambiente de testes. A detecção agora usa o sinal de aborto do controlador.
+- Corrigida a condição de corrida que poderia restaurar o estado local por /me
+  tardio após logout; há testes para esse comportamento.
+- Testes/build frontend exigiram execução autorizada fora do sandbox por bloqueio
+  de leitura do esbuild. Permanece o aviso backend Starlette/httpx já conhecido.
+- Não houve navegador automatizado disponível para homologação real de cookies,
+  navegação ou medidas de overflow em celulares/tablets. Testes DOM não comprovam
+  geometria visual ou políticas SameSite/third-party dos navegadores.
+- As integrações frontend usam mocks HTTP controlados, não uma sessão de browser
+  ligada ao PostgreSQL. O backend foi revalidado separadamente no banco real.
+- Sessão expirada é reconhecida na próxima consulta; não há evento de expiração
+  instantâneo vindo do servidor. Validação definitiva de entrada fica no backend.
+- Rate limiting compartilhado, limpeza de sessões e verificação de e-mail continuam
+  com as limitações documentadas nas etapas anteriores.
+
+### Operação
+
+O README contém comandos de backend/frontend, teste e variáveis. VITE_URL_API
+recebe a origem da API sem /api e é pública, definida no build. ORIGENS_PERMITIDAS
+deve incluir a origem exata do frontend; não misturar localhost/127.0.0.1.
+Cookie permanece host-only/HttpOnly/Secure conforme ambiente e SameSite conforme
+o deploy. CSRF é recebido no login/me e devolvido no header do logout.
+Hospedagem estática deve redirecionar caminhos da SPA para index.html; nenhuma
+configuração de deploy foi modificada. A instância PostgreSQL de testes foi
+encerrada após a validação, preservando dados locais e serviços preexistentes.
+
+Commit sugerido: `feat: integrar autenticacao ao frontend`.
+Nenhum commit, push, deploy ou alteração em produção foi realizado.
+Não houve avanço para a Etapa 3.5 ou Fase 4.

@@ -5,10 +5,16 @@ type Propriedades = ButtonHTMLAttributes<HTMLButtonElement> & {
   children: ReactNode;
 };
 
-export function Botao({ variante = 'principal', className = '', children, ...propriedades }: Propriedades) {
-  const estilo = variante === 'principal'
-    ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-    : 'border border-current/20 hover:bg-current/5';
+export function Botao({
+  variante = 'principal',
+  className = '',
+  children,
+  ...propriedades
+}: Propriedades) {
+  const estilo =
+    variante === 'principal'
+      ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+      : 'border border-current/20 hover:bg-current/5';
 
   return (
     <button

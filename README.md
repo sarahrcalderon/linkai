@@ -67,7 +67,7 @@ bloqueado pela política de execução. O build inclui a checagem TypeScript.
 Componentes reutilizáveis, temas claro/escuro e prévia responsiva permanecem
 preservados. Os números exibidos são fictícios. Consulte o
 [design system](docs/arquitetura/fase2-design-system.md).
-O formulário de cadastro no frontend fica para a etapa de integração React.
+Cadastro e login agora estão integrados à API na Etapa 3.4, descrita abaixo.
 
 ## Etapa 3.2 — Cadastro seguro
 
@@ -289,6 +289,92 @@ Sessões expiradas/revogadas permanecem no banco; limpeza periódica com retenç
 definida ainda deve ser planejada. Requisições já autorizadas antes do logout
 podem terminar; requisições posteriores à revogação confirmada recebem `401`.
 
+## Etapa 3.4 — Autenticação no React
+
+Páginas `/cadastro`, `/login` e `/dashboard` integradas aos contratos existentes,
+com navegação via History API e sem nova dependência de roteamento. A página
+inicial mantém o design system e a prévia demonstrativa; o dashboard privado
+mostra somente os dados públicos da conta e controles de sessão, sem analytics.
+
+### Configuração local
+
+1. Configure PostgreSQL e `backend/.env` conforme as instruções anteriores.
+2. Em `backend`, execute `alembic upgrade head` e
+   `uvicorn aplicacao.principal:app --reload --no-proxy-headers`.
+3. Copie `frontend/.env.exemplo` para `frontend/.env`. Defina
+   `VITE_URL_API=http://localhost:8000`, sem `/api` no final.
+4. Em `frontend`, execute `npm install` e `npm run dev`.
+5. Acesse http://localhost:5173. Use o mesmo nome de host nos dois serviços;
+   não misture `localhost` e `127.0.0.1`.
+
+`VITE_URL_API` é uma configuração pública incorporada ao build Vite. Não coloque
+segredos nela. Em produção, configure explicitamente a origem HTTPS da API antes
+de executar `npm run build`; não há URL fixa de produção no código.
+O servidor de arquivos do frontend precisa devolver `index.html` ao acessar
+diretamente `/cadastro`, `/login` ou `/dashboard`, preservando os caminhos da SPA.
+Nenhuma configuração de hospedagem ou deploy foi alterada nesta entrega.
+
+`ORIGENS_PERMITIDAS` no backend deve conter exatamente a origem do frontend, por
+exemplo `["http://localhost:5173"]`. O navegador envia Origin automaticamente;
+o serviço HTTP usa `credentials: 'include'` em todas as chamadas. CORS continua
+com origens explícitas e credenciais habilitadas. Não houve mudança de endpoints.
+Cookies seguem as regras da Etapa 3.3: HttpOnly, host-only, Secure em produção,
+SameSite conforme a relação entre sites e ausência de Domain compartilhado.
+
+### Fluxos e segurança
+
+- Cadastro valida nome, e-mail e senha, mostra erros junto aos campos e bloqueia
+  envios simultâneos. Aceita somente o status 202 contratado e mostra a mensagem
+  uniforme de que a verificação de e-mail será necessária. Não informa existência
+  da conta, não afirma envio de e-mail e não autentica automaticamente.
+- Login atualiza o estado apenas depois de 200 com usuário verificado e CSRF válido.
+  Respostas 401 permanecem genéricas, incluindo conta não verificada; 429 e falhas
+  de rede/serviço recebem feedback acessível. Senhas são limpas ao concluir a requisição.
+- A inicialização consulta `/me` uma vez, inclusive em React StrictMode. Usuário
+  e CSRF ficam somente em memória. Não há token/credencial em localStorage ou
+  sessionStorage; somente a preferência de tema continua no localStorage.
+- A área privada fica oculta durante carregamento, ausência de autenticação ou
+  indisponibilidade da API. Falha de rede não é interpretada como logout confirmado;
+  existe ação para tentar consultar novamente.
+- Logout envia `X-CSRF-Token` com o valor do login ou de `/me`. Apenas após 204
+  limpa o estado. Falha 403/503 preserva a sessão e apresenta erro; é possível
+  atualizar a sessão para recuperar o CSRF caso outra aba tenha trocado o cookie.
+- `/me` com 401 remove o acesso e pede novo login. Há revalidação ao retornar
+  o foco/visibilidade, limitada a uma vez por minuto, além do botão Atualizar sessão.
+  Não há polling em segundo plano nem requisição por renderização.
+- Consultas pendentes são deduplicadas e respostas antigas não podem desfazer
+  login/logout. A autorização definitiva permanece no backend em cada requisição.
+- O cliente aborta chamadas após 15 segundos e não registra credenciais, cookies
+  ou CSRF em logs. A proteção do frontend não substitui a autorização da API.
+
+Contas criadas pela API continuam não verificadas. Para exercitar login válido
+antes da Fase 4, execute os testes backend, que usam fixtures verificadas isoladas;
+não existe atalho público para ativação de conta.
+
+### Validação e limites
+
+```bash
+cd frontend
+npm run lint
+npm run test
+npm run build
+npm run format:check
+```
+
+Etapa 3.4: **29 testes frontend aprovados**, ESLint, TypeScript/build e Prettier
+aprovados. Backend preservado: **103 aprovados, 1 ignorado**, com PostgreSQL 18.6
+real; Ruff lint e formatação aprovados. Os testes frontend usam respostas HTTP
+controladas compatíveis com os contratos, incluindo rejeições e falhas.
+
+Não foi realizada homologação ponta a ponta em navegador com cookies reais nem
+medição visual de overflow em dispositivos. Formulários usam largura fluida,
+campos sem largura mínima fixa e controles que quebram linha; acessibilidade e
+associação de erros foram verificadas em DOM de teste. As restrições de cookies
+de terceiros dos navegadores continuam relevantes em sites distintos.
+Uma sessão expirada é reconhecida na próxima consulta; não há encerramento visual
+instantâneo por evento do servidor. Validação completa de e-mail continua no backend.
+Brevo, verificação real de e-mail, métricas reais e Etapa 3.5 não foram implementados.
+
 ## Arquitetura e próximas etapas
 
 Em `backend/src/aplicacao`: domínio independente, contratos e casos de uso,
@@ -297,11 +383,11 @@ infraestrutura assíncrona e apresentação HTTP. O repositório executa flush;
 em dependência com escopo de função para concluir o commit antes de enviar a resposta.
 Não foram necessárias novas migrações na Etapa 3.2.
 
-Próxima entrega: Etapa 3.4, integração React, ainda não implementada.
+Etapa 3.4 concluída no escopo acima. Etapa 3.5 não iniciada.
 Fase 4: verificação real de e-mail e integração Brevo por abstração.
 Variáveis futuras previstas, ainda não utilizadas: `BREVO_API_KEY`, `EMAIL_REMETENTE`,
 `NOME_REMETENTE` e `URL_PUBLICA_FRONTEND`. Links e analytics também ficam fora do escopo.
 
 Resultados e arquivos: [relatório da Fase 3](docs/relatorios/fase3-autenticacao.md).
-Commit sugerido para a Etapa 3.3: `feat: implementar autenticacao e sessoes`.
+Commit sugerido para a Etapa 3.4: `feat: integrar autenticacao ao frontend`.
 Nenhum commit, push ou deploy foi executado automaticamente.

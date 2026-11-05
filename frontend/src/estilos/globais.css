@@ -8,6 +8,25 @@
   color-scheme: light;
 }
 
-:root[data-tema='escuro'] { color-scheme: dark; }
-body { margin: 0; min-width: 320px; }
-button, input { font: inherit; }
+:root[data-tema='escuro'] {
+  color-scheme: dark;
+}
+body {
+  margin: 0;
+  min-width: 320px;
+}
+button,
+input {
+  font: inherit;
+}
+input {
+  min-width: 0;
+  width: 100%;
+}
+a:focus-visible {
+  outline: 2px solid #059669;
+  outline-offset: 4px;
+}
+h1 {
+  outline: none;
+}
