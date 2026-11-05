@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, String, Uuid, false, true
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, String, Uuid, false, true
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from aplicacao.dominio.usuario import agora_utc
@@ -30,3 +30,20 @@ class ModeloUsuario(Base):
     atualizado_em: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, onupdate=agora_utc
     )
+
+
+class ModeloSessao(Base):
+    __tablename__ = "sessoes"
+    __table_args__ = (
+        CheckConstraint("expira_em > criado_em", name="ck_sessoes_expiracao"),
+        CheckConstraint("length(token_hash) = 64", name="ck_sessoes_hash_tamanho"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    usuario_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expira_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    revogado_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

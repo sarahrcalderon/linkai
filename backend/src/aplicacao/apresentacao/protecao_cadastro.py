@@ -8,10 +8,13 @@ from aplicacao.apresentacao.erros import resposta_erro
 
 
 class ProtecaoCadastro:
-    def __init__(self, app: ASGIApp, limite: int, janela: int) -> None:
+    def __init__(
+        self, app: ASGIApp, limite: int, janela: int, caminho: str = "/api/autenticacao/cadastro"
+    ) -> None:
         self.app = app
         self.limite = limite
         self.janela = janela
+        self.caminho = caminho
         self.tentativas: dict[str, deque[float]] = {}
 
     def permitir(self, origem: str) -> int:
@@ -38,7 +41,7 @@ class ProtecaoCadastro:
         if (
             scope["type"] != "http"
             or scope["method"] != "POST"
-            or (scope["path"].rstrip("/") != "/api/autenticacao/cadastro")
+            or (scope["path"].rstrip("/") != self.caminho)
         ):
             await self.app(scope, receive, send)
             return

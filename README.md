@@ -29,6 +29,11 @@ O usuário do banco precisa criar tabelas e índices para aplicar migrações.
 | `ORIGENS_PERMITIDAS` | Lista JSON de origens explícitas; padrão `["http://localhost:5173"]` |
 | `CADASTRO_LIMITE_TENTATIVAS` | 5 requisições por IP, por processo |
 | `CADASTRO_JANELA_SEGUNDOS` | Janela móvel de 900 segundos |
+| `LOGIN_LIMITE_TENTATIVAS` | 10 requisições de login por IP, por processo |
+| `LOGIN_JANELA_SEGUNDOS` | Janela móvel de 900 segundos |
+| `SESSAO_DURACAO_SEGUNDOS` | Duração fixa: 28800 segundos (8h), entre 60 e 604800 |
+| `SESSAO_COOKIE_SEGURO` | Opcional no desenvolvimento; Secure é obrigatório em produção |
+| `SESSAO_COOKIE_SAMESITE` | `lax` (padrão), `strict` ou `none` |
 | `URL_BANCO_TESTE` | Variável do processo, apontando para PostgreSQL exclusivo de testes |
 
 Codifique caracteres especiais nas credenciais da URL. Neon Free: use a URL
@@ -81,8 +86,9 @@ O corpo completo tem limite de 8192 bytes, inclusive em envio por chunks.
 
 Senhas recebem hash Argon2id com salt aleatório, pela biblioteca argon2-cffi,
 fora do event loop, com no máximo dois hashes simultâneos por processo.
-O usuário nasce ativo e com `email_verificado=false`. Não há autenticação
-automática, cookies, login, sessões ou envio de e-mail nesta etapa.
+O usuário nasce ativo e com `email_verificado=false`. O cadastro não autentica
+automaticamente nem cria cookie. Login e sessões estão descritos na Etapa 3.3
+abaixo; ainda não há envio de e-mail.
 
 Para testar, inicie o banco e a API, abra `/docs` e envie o cadastro. Exemplo
 de corpo com dados fictícios, somente para teste local:
@@ -170,6 +176,119 @@ a partir de `backend`. Use somente esse banco exclusivo, nunca produção.
 Dados, logs e senha aleatória ficam em `.postgres-teste/`, ignorada pelo Git.
 Não é necessário modificar os serviços PostgreSQL existentes.
 
+## Etapa 3.3 — Login, sessões e logout
+
+| Método | Endpoint | Comportamento |
+| --- | --- | --- |
+| POST | `/api/autenticacao/login` | E-mail/senha em JSON; `200` somente para conta ativa e verificada |
+| GET | `/api/usuarios/me` | `200` com usuário público e CSRF; `401` sem sessão válida |
+| POST | `/api/autenticacao/logout` | Revoga sessão, apaga cookie e responde `204` |
+
+O login normaliza o e-mail e verifica Argon2id. E-mail inexistente, senha errada,
+conta inativa ou não verificada recebem o mesmo `401`, com código
+`credenciais_invalidas` e mensagem `E-mail ou senha inválidos.`. Um hash fictício
+é verificado quando a conta não existe para reduzir diferenças de processamento.
+O cadastro continua sem liberar acesso; não há endpoint para verificar e-mails.
+
+Login e logout exigem `Origin` exatamente igual a uma entrada de
+`ORIGENS_PERMITIDAS`; ausência ou origem diferente recebe `403`. Isso também
+protege contra login CSRF, antes de existir sessão. Para testar pelo Swagger local,
+inclua `http://localhost:8000` na lista de origens de desenvolvimento; em CLI,
+envie `Origin: http://localhost:5173` explicitamente. O login aceita somente os
+campos e-mail e senha, com senha de 1–128 caracteres; campos extras são rejeitados.
+
+Login e `/me` retornam este formato, sem hash de senha ou token de sessão no JSON:
+
+```json
+{
+  "usuario": {
+    "id": "UUID",
+    "nome": "Ana",
+    "email": "ana@example.com",
+    "email_verificado": true
+  },
+  "csrf": "valor de proteção fornecido pela API"
+}
+```
+
+O token de sessão usa 32 bytes aleatórios (256 bits) e viaja somente em cookie
+HttpOnly. No banco fica apenas SHA-256 do token, com índice único, FK do usuário,
+datas UTC, expiração e revogação. SHA-256 é utilizado para resumir tokens aleatórios;
+senhas continuam usando Argon2id. O login sempre gera outro token e revoga a sessão
+anterior apresentada no cookie, na mesma transação. Outros dispositivos continuam
+com suas próprias sessões. Não há renovação automática do prazo.
+
+Em desenvolvimento HTTP, cookie `linkai_sessao`, `Path=/api`, `HttpOnly`,
+`SameSite=lax`, expiração e Max-Age. Com Secure habilitado (sempre em produção),
+o nome é `__Host-linkai_sessao`, `Path=/`, `Secure`, sem atributo Domain.
+O prefixo exige esse caminho e impede cookies Domain equivalentes definidos por
+outro subdomínio. O cookie pertence apenas ao host da API.
+
+Para `app.exemplo.com` e `api.exemplo.com` ambos em HTTPS, normalmente `lax`
+atende por serem do mesmo site. Em sites distintos, use `none` com Secure/HTTPS;
+políticas do navegador para cookies de terceiros ainda podem bloquear o fluxo.
+Produção exige `AMBIENTE=producao`, origens HTTPS explícitas, sem curingas.
+Configuração insegura é rejeitada ao carregar a aplicação. CORS permite credenciais
+e os cabeçalhos Content-Type e X-CSRF-Token apenas para as origens configuradas.
+
+O cliente deve usar `credentials: 'include'`, manter o CSRF retornado em memória
+e enviá-lo no cabeçalho `X-CSRF-Token` ao fazer logout. `/me` permite recuperar
+esse valor após recarregar a página. Ele é um HMAC-SHA-256 vinculado ao token
+da sessão e comparado em tempo constante, sem outro segredo persistido.
+CSRF ausente, errado ou de outra sessão recebe `403`, sem revogação ou remoção
+do cookie. Sem cookie, logout continua idempotente (`204`, com Origin permitido).
+Sessão já revogada ou expirada também pode ser encerrada com o CSRF correspondente.
+Nenhum token deve ir para localStorage ou sessionStorage. Respostas de autenticação
+usam `Cache-Control: no-store`; não registre cookies ou cabeçalhos CSRF em logs.
+
+Falhas no banco de sessões retornam `503`, sem autenticação alternativa. Falha no
+commit do login não entrega cookie; falha no logout não confirma a revogação nem
+apaga o cookie. A dependência encerra a transação antes de enviar a resposta.
+
+### Migração, execução e testes da 3.3
+
+Com URL_BANCO configurada para o banco local, execute a partir de `backend`:
+
+```bash
+alembic upgrade head
+alembic current
+uvicorn aplicacao.principal:app --reload --no-proxy-headers
+```
+
+Revisão atual: `0002`. Para testar reversão apenas em banco descartável:
+`alembic downgrade 0001` remove sessões, preservando usuários;
+`alembic upgrade head` recria sessões. Os cookies antigos deixam de funcionar.
+
+Com o PostgreSQL exclusivo iniciado e URL_BANCO_TESTE definida conforme o bloco
+PowerShell acima:
+
+```bash
+pytest
+pytest testes/integracao/teste_autenticacao.py -q
+pytest testes/integracao/teste_postgres_migracao.py -q
+ruff check .
+ruff format --check .
+```
+
+Os testes criam usuários verificados somente em fixtures isoladas, exercitam os
+endpoints e removem os schemas ao terminar. Para testar login válido nesta etapa,
+use essas fixtures; contas criadas pela API continuam recebendo `401` até a Fase 4.
+Não há ativação pública nem credenciais de teste incluídas no banco normal.
+
+Homologação 3.3: **103 testes backend aprovados, 1 ignorado**, PostgreSQL 18.6
+real, migração `0002 → 0001 → 0002` aprovada e usuários preservados. Login,
+expiração, revogação, CSRF, concorrência e falhas de infraestrutura/commit aprovados.
+Ruff, ESLint, **5 testes frontend** e build/TypeScript aprovados.
+
+Os limitadores de cadastro e login continuam em memória, independentes, por IP
+e processo. Não são adequados como controle global em múltiplas instâncias.
+Antes de escalar, adote contadores atômicos compartilhados no PostgreSQL ou em
+Valkey/Redis auto-hospedado, além do controle na borda; não exigem licença paga.
+Configure corretamente a confiança em proxies para não permitir IP forjado.
+Sessões expiradas/revogadas permanecem no banco; limpeza periódica com retenção
+definida ainda deve ser planejada. Requisições já autorizadas antes do logout
+podem terminar; requisições posteriores à revogação confirmada recebem `401`.
+
 ## Arquitetura e próximas etapas
 
 Em `backend/src/aplicacao`: domínio independente, contratos e casos de uso,
@@ -178,11 +297,11 @@ infraestrutura assíncrona e apresentação HTTP. O repositório executa flush;
 em dependência com escopo de função para concluir o commit antes de enviar a resposta.
 Não foram necessárias novas migrações na Etapa 3.2.
 
-Próximas entregas: Etapa 3.3, autenticação e sessões; integração React em etapa
-posterior. Fase 4: verificação real de e-mail e integração Brevo por abstração.
+Próxima entrega: Etapa 3.4, integração React, ainda não implementada.
+Fase 4: verificação real de e-mail e integração Brevo por abstração.
 Variáveis futuras previstas, ainda não utilizadas: `BREVO_API_KEY`, `EMAIL_REMETENTE`,
 `NOME_REMETENTE` e `URL_PUBLICA_FRONTEND`. Links e analytics também ficam fora do escopo.
 
 Resultados e arquivos: [relatório da Fase 3](docs/relatorios/fase3-autenticacao.md).
-Commit sugerido: `feat: implementar cadastro seguro de usuarios`.
+Commit sugerido para a Etapa 3.3: `feat: implementar autenticacao e sessoes`.
 Nenhum commit, push ou deploy foi executado automaticamente.

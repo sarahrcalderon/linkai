@@ -199,3 +199,143 @@ O cluster de teste foi encerrado após as verificações, com dados locais prese
 
 Commit sugerido: `feat: implementar cadastro seguro de usuarios`.
 Não foram executados commits, pushes, deploys ou alterações de produção.
+
+## Etapa 3.3 — Login e sessões seguras (05/11/2026)
+
+As seções anteriores mantêm o histórico das etapas 3.1 e 3.2. Esta entrega
+implementa exclusivamente a 3.3, após revisão dos contratos, modelos, migrações,
+composição da API e testes existentes. Não houve avanço para a 3.4.
+
+### Decisões e implementação
+
+- Domínio: entidade Sessao, contrato de repositório e regras de expiração/revogação,
+  sem imports de FastAPI ou SQLAlchemy. Identificadores UUID, datas UTC e hash oculto no repr.
+- Aplicação: casos separados para autenticar, consultar usuário autenticado e encerrar
+  sessão. Dependem de protocolos de usuários, sessões, hash e tokens.
+- Login normaliza o e-mail, verifica Argon2id fora do event loop e rejeita com o
+  mesmo 401 senha errada, conta ausente, inativa ou não verificada. Conta ausente
+  também executa Argon2id contra hash fictício gerado no ciclo de vida da aplicação.
+- Infraestrutura gera 32 bytes aleatórios com secrets, persiste apenas SHA-256 do
+  token e deriva o CSRF por HMAC-SHA-256 com o próprio token como chave. Nenhuma
+  criptografia própria, token em texto puro no banco ou dependência paga.
+- Migração 0002: tabela sessoes, FK com cascade para usuários, índice único do hash,
+  índices de usuário/expiração e restrições de tamanho e prazo.
+- Cada login bem-sucedido cria novo token. A sessão anterior apresentada pelo
+  cliente é revogada na mesma transação; token pré-fixado nunca é reaproveitado.
+- Consulta verifica sessão existente, prazo, revogação e estado atual do usuário.
+  Retorna somente id, nome, e-mail, email_verificado e o CSRF da sessão, sem senha,
+  hash ou token de autenticação no JSON. Todas as respostas sensíveis usam no-store.
+- Logout faz UPDATE atômico condicionado à ausência de revogação. É idempotente
+  com Origin permitido; se houver token, exige CSRF correspondente mesmo para
+  sessões expiradas/revogadas. Cookie é apagado após revogação confirmada.
+- Cookies host-only, HttpOnly e com prazo fixo de 8h por padrão. Desenvolvimento
+  HTTP usa linkai_sessao em /api. HTTPS/Secure usa __Host-linkai_sessao em /, sem
+  Domain, impedindo injeção equivalente por subdomínios. Secure obrigatório em produção.
+- SameSite=lax por padrão; none exige Secure. Produção exige origens HTTPS explícitas
+  e rejeita curingas. CORS passa a permitir credenciais e X-CSRF-Token.
+- Origin explícito e permitido obrigatório para login/logout, inclusive clientes CLI.
+  Logout autenticado também valida CSRF, com comparação em tempo constante. O cliente
+  futuro deverá manter CSRF em memória e usar credentials: include; /me recupera o valor.
+- O middleware existente foi parametrizado por caminho para aplicar ao login um
+  limitador independente, preservando o cadastro. Padrão login: 10 tentativas por
+  IP/900 segundos e corpo de até 8192 bytes, antes de validação/hash.
+- Dependência de transação com escopo de função confirma commit antes de enviar
+  qualquer cookie. Falha de infraestrutura/commit recebe 503 genérico, sem fallback.
+
+### Arquivos criados
+
+Relativos a `backend/`:
+
+- `src/aplicacao/dominio/sessao.py` e `repositorio_sessoes.py`.
+- `src/aplicacao/casos_de_uso/contratos_autenticacao.py`, `servico_tokens.py`,
+  `autenticar_usuario.py`, `consultar_autenticado.py` e `encerrar_sessao.py`.
+- `src/aplicacao/infraestrutura/tokens.py` e `repositorio_sessoes.py`.
+- `src/aplicacao/infraestrutura/migracoes/versions/0002_criar_sessoes.py`.
+- `src/aplicacao/apresentacao/cookies_sessao.py`, `dependencias_autenticacao.py`,
+  `schemas_autenticacao.py` e `rotas/autenticacao.py`.
+- `testes/integracao/teste_autenticacao.py`.
+- `testes/unitarios/teste_sessao.py` e `teste_configuracao_sessao.py`.
+
+### Arquivos modificados
+
+- `backend/src/aplicacao/configuracao.py`: limites, prazo, cookies e validação de origens.
+- `backend/src/aplicacao/principal.py`: composição, ciclo de vida, middleware e CORS.
+- `backend/src/aplicacao/casos_de_uso/servico_hash.py` e
+  `infraestrutura/hash_senha.py`: contrato e implementação de verificação Argon2id.
+- `backend/src/aplicacao/infraestrutura/modelos.py`: modelo da sessão.
+- `backend/src/aplicacao/apresentacao/erros.py`: 401/403 padronizados, no-store e validação de login.
+- `backend/src/aplicacao/apresentacao/protecao_cadastro.py`: seleção do caminho protegido.
+- `backend/testes/integracao/teste_migracao.py` e `teste_postgres_migracao.py`:
+  revisão 0002, reversão e preservação de usuários na reversão exclusiva da 3.3.
+- `backend/.env.exemplo`, `README.md` e este relatório.
+
+Nenhum arquivo frontend foi alterado. Não foram adicionadas dependências nesta etapa.
+
+### Homologação observada em PostgreSQL 18.6
+
+Reutilizada a instância exclusiva em 127.0.0.1:55432, banco linkai_homologacao,
+sem alterar os serviços PostgreSQL preexistentes. Integrações aplicam Alembic em
+schemas aleatórios e os removem ao final. Usuários verificados existem somente
+em fixtures controladas; não há endpoint de ativação.
+
+| Cenário | Resultado efetivamente observado |
+| --- | --- |
+| Migração pela CLI | upgrade head → current 0002 → downgrade 0001 → current 0001 → upgrade head → current 0002 |
+| Migração automatizada | Metadados equivalentes; reversão 0002→0001 preserva usuário, remove sessões; novo avanço preserva usuário; também validada reversão completa e recriação |
+| Login válido | 200, sessão persistida, cookie com prazo e HttpOnly; /me retorna mesmo usuário e CSRF |
+| Falhas de credenciais/estado | Senha errada, e-mail inexistente, não verificado e inativo recebem exatamente a mesma resposta 401; zero sessões criadas |
+| Cadastro seguido de login | Cadastro permanece 202, não verificado; login rejeitado com 401 |
+| Armazenamento e logs | Apenas hash do token persistido; senha/hash/token não aparecem no JSON nem nos logs capturados, inclusive em falhas |
+| Sessões inválidas | Token ausente, inexistente, malformado, expirado ou revogado recebem 401; alteração posterior do estado do usuário também bloqueia /me |
+| Logout | 204, revogação persistida e cookie Max-Age=0; repetição segura; replay do token revogado recebe 401 |
+| CSRF | Valor ausente, errado ou de outra sessão e Origin não permitido recebem 403, sem revogar nem apagar cookie |
+| CORS/Origin | Preflight permite credenciais/cabeçalho CSRF para origem explícita; origem maliciosa ou ausente não consegue fazer login |
+| Força bruta | Limite configurado de 3 na fixture bloqueia quarta tentativa com 429/Retry-After; cadastro mantém contador independente |
+| Produção | Secure, HttpOnly, SameSite=none, prefixo __Host-, Path=/ e ausência de Domain comprovados no cookie de login/logout |
+| Fixação/rotação | Token fornecido previamente não é aceito como novo token; novo login revoga o anterior, que passa a receber 401 |
+| Concorrência | Dois logins simultâneos criam tokens distintos; dois logouts simultâneos da mesma sessão têm sucesso e somente essa sessão é revogada |
+| Falha no commit | UNIQUE adiado até o commit rejeita segundo login com 503 e sem Set-Cookie; rollback preserva a sessão anterior ativa |
+| Falha de revogação | Restrição de banco rejeita UPDATE com 503, sem apagar cookie nem afirmar revogação; sessão permanece utilizável |
+| Infraestrutura indisponível | Renomear tabela de sessões faz login, /me e logout retornarem 503, sem cookies/segredos; após restauração, a sessão anterior funciona |
+| Validação/limites | Campos extras, ausentes, e-mail inválido e senha acima do limite rejeitados; login com corpo de 8193 bytes recebe 413 |
+
+### Validações finais
+
+- `pytest`: **103 aprovados, 1 ignorado**. O ignorado continua sendo a variante
+  SQLite de concorrência da 3.1; a correspondente PostgreSQL e todos os novos
+  testes de sessões foram executados em PostgreSQL real.
+- `ruff check .` e `ruff format --check .`: aprovados.
+- Frontend: ESLint, **5 testes** e build/TypeScript aprovados.
+- Permanece o aviso de depreciação Starlette/httpx do TestClient existente.
+- Frontend precisou da repetição autorizada fora do sandbox por bloqueio de leitura
+  do esbuild. O PostgreSQL isolado também foi iniciado fora do sandbox e encerrado
+  depois dos testes. Nenhuma falha ficou pendente na suíte.
+
+### Configuração, limites e pendências
+
+Variáveis novas documentadas no README e .env.exemplo: LOGIN_LIMITE_TENTATIVAS,
+LOGIN_JANELA_SEGUNDOS, SESSAO_DURACAO_SEGUNDOS, SESSAO_COOKIE_SEGURO e
+SESSAO_COOKIE_SAMESITE. AMBIENTE aceita desenvolvimento, teste e producao.
+Produção exige HTTPS nas origens e não permite Secure=false. O endereço do proxy
+confiável deve ser configurado no servidor, sem aceitar X-Forwarded-For de qualquer origem.
+
+O rate limiting continua em memória, por IP/processo e com reinício do histórico
+ao reiniciar a aplicação. Não é adequado como limite global de múltiplos workers.
+Antes de escalar, usar contadores atômicos no PostgreSQL ou Valkey/Redis auto-hospedado,
+mais limitação na borda; nenhuma dessas alternativas exige serviço pago.
+Respostas genéricas e hash fictício reduzem enumeração, sem garantir tempo constante.
+Sessões têm prazo fixo; limpeza periódica dos registros antigos e retenção ainda
+precisam de planejamento. Requisições já autorizadas podem terminar durante logout;
+após a revogação confirmada, novas consultas rejeitam o token.
+
+Em sites distintos, SameSite=None/Secure ainda depende de políticas de cookies de
+terceiros do navegador. Não houve teste em browser nem integração frontend nesta etapa.
+Neon continua sem conexão real, somente compatibilidade de configuração já validada.
+Verificação por e-mail, Brevo, dashboard real, links e Etapa 3.4 não foram implementados.
+
+Para reproduzir: iniciar banco exclusivo, definir URL_BANCO/URL_BANCO_TESTE,
+executar `alembic upgrade head`, iniciar Uvicorn e rodar `pytest`, Ruff e comandos
+frontend. O README contém os comandos completos e o contrato HTTP/CSRF.
+
+Commit sugerido: `feat: implementar autenticacao e sessoes`.
+Nenhum commit, push, deploy ou alteração em produção foi realizado.
