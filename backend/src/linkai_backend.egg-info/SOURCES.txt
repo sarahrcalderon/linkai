@@ -1,0 +1,15 @@
+pyproject.toml
+src/aplicacao/__init__.py
+src/aplicacao/configuracao.py
+src/aplicacao/principal.py
+src/aplicacao/apresentacao/__init__.py
+src/aplicacao/apresentacao/rotas/__init__.py
+src/aplicacao/apresentacao/rotas/saude.py
+src/aplicacao/casos_de_uso/__init__.py
+src/aplicacao/dominio/__init__.py
+src/aplicacao/infraestrutura/__init__.py
+src/linkai_backend.egg-info/PKG-INFO
+src/linkai_backend.egg-info/SOURCES.txt
+src/linkai_backend.egg-info/dependency_links.txt
+src/linkai_backend.egg-info/requires.txt
+src/linkai_backend.egg-info/top_level.txt

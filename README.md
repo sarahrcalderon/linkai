@@ -48,3 +48,7 @@ Esta fase implementa apenas a fundação, um endpoint de saúde e a interface in
 4. `test: configurar verificacoes de qualidade`
 
 Execute e valide cada etapa antes de registrar o commit. Os arquivos deste pacote não foram commitados automaticamente.
+
+## Fase 2 — Interface
+
+Componentes reutilizáveis, temas claro/escuro, prévia responsiva do dashboard e testes de interface. Os números exibidos são fictícios. Consulte `docs/arquitetura/fase2-design-system.md`.
