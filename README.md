@@ -505,7 +505,7 @@ Contratos internos: `gerar_desafio(usuario_id)`, `confirmar(usuario_id, codigo)`
 `invalidar(usuario_id)`. Geração também prepara o reenvio. `DesafioGerado` é um
 DTO interno com código protegido por SecretStr, destinado ao futuro serviço de
 entrega, nunca a uma resposta HTTP. `ServicoEnvioEmail` é somente uma interface.
-Nenhum cliente ou credencial Brevo foi configurado.
+O adaptador desse contrato está descrito na Etapa 4.2 abaixo, sem credenciais reais no código.
 
 As operações bloqueiam a linha do usuário em uma transação. O consumo e a alteração
 de `email_verificado` são atômicos; tentativa incorreta é persistida, mesmo retornando
@@ -542,6 +542,102 @@ adaptador de envio pelo contrato, entrega após commit, retentativas, respostas
 uniformes e experiência de confirmação. Não avance automaticamente para essas
 funcionalidades. Relatório e arquivos: [Etapa 4.1](docs/relatorios/fase4-verificacao-email.md).
 
+## Etapa 4.2 — Adaptador Brevo
+
+Adaptador opcional de infraestrutura para `ServicoEnvioEmail`, sem ativação no
+cadastro/login, sem endpoints ou telas novas. A API continua criando contas não
+verificadas; importar ou iniciar a aplicação não exige configuração Brevo.
+
+Usa HTTPX assíncrono em HTTPS, TLS padrão, sem proxies de ambiente ou redirecionamentos,
+no endpoint transacional oficial. A chave vai apenas no cabeçalho `api-key`.
+HTML e texto simples são gerados localmente, sem scripts ou imagens externas,
+com código em destaque, expiração absoluta em UTC e aviso para ignorar cadastro
+não solicitado. Conteúdo dinâmico do HTML é escapado.
+Contrato consultado: [API transacional Brevo](https://developers.brevo.com/reference/send-transac-email).
+
+### Configuração e remetente
+
+Somente ao entrar em `criar_envio_brevo()` as configurações obrigatórias são lidas
+e validadas. O arquivo existente é `backend/.env.exemplo`; copie os parâmetros
+necessários para o ambiente local, nunca valores reais para o repositório.
+
+| Variável | Uso |
+| --- | --- |
+| `BREVO_API_KEY` | Obrigatória; chave de API HTTPS, SecretStr, não chave SMTP |
+| `BREVO_EMAIL_REMETENTE` | Obrigatório; endereço validado no Brevo |
+| `BREVO_NOME_REMETENTE` | Nome exibido; padrão Linkai |
+| `BREVO_TIMEOUT_SEGUNDOS` | Até 10s por operação de I/O por tentativa, limitado pelo orçamento restante |
+| `BREVO_LIMITE_TENTATIVAS` | Até 3 tentativas no total por chamada |
+| `BREVO_TEMPO_TOTAL_SEGUNDOS` | Orçamento total padrão de 20s, incluindo esperas |
+
+Na conta Free, cadastre o nome/endereço em configurações de remetentes. Se solicitado,
+confirme o código enviado ao endereço do remetente; autentique o domínio com os
+registros fornecidos pelo painel. Isso não foi feito automaticamente nesta entrega.
+Siga as instruções oficiais de [criação do remetente](https://help.brevo.com/hc/en-us/articles/208836149-Create-a-new-sender-From-name-and-From-email)
+e [autenticação de domínio](https://help.brevo.com/hc/en-us/articles/12163873383186-Authenticate-your-domain-with-Brevo-Brevo-code-DKIM-DMARC).
+
+O plano Free consultado em 06/11/2026 permite 300 envios diários, sem acumular
+a sobra para o dia seguinte. O adaptador não compra créditos, não altera plano
+nem usa recursos de IP dedicado. Manter a conta no Free e acompanhar a cota é
+responsabilidade da operação. Nenhum e-mail real foi enviado nesta etapa.
+Fonte: [planos Brevo](https://help.brevo.com/hc/en-us/articles/208589409-About-Brevo-s-pricing-plans).
+
+### Aceitação, falhas e duplicação
+
+O método retorna `None` somente após **201 com messageId não vazio**, indicando
+aceitação pela API, nunca entrega na caixa de entrada. Não há webhook, consulta
+de entrega, persistência do messageId ou rastreamento nesta etapa.
+
+| Ocorrência | Política |
+| --- | --- |
+| ConnectError, ConnectTimeout, PoolTimeout | Retentativa limitada, backoff 0,5s e 1s no padrão; nenhuma requisição enviada |
+| 429 | Respeita Retry-After em segundos ou data HTTP; ausente/inválido usa backoff |
+| Retry-After além do prazo/código expirado | Interrompe; não encurta a espera para reenviar antes do permitido |
+| 400/401/403 e outros 4xx permanentes | Não repete; exceção permanente neutra |
+| 5xx, 408, timeout de leitura/escrita, desconexão após envio | Resultado indeterminado; sem repetição automática |
+| 201 sem JSON/messageId válido, 200/202 ou redirecionamento | Resultado indeterminado; não declara aceitação nem segue redirect |
+| duplicate_parameter ou 409 | Indeterminado, não tratado como comprovante de envio |
+| Orçamento total esgotado durante operação | Indeterminado; não dispara nova tentativa |
+
+O mesmo payload e UUID do desafio em `headers.idempotencyKey` são mantidos nas
+retentativas. O guia Brevo documenta janela de 30 minutos para idempotência em
+batch; isso é defesa adicional, não garantia de entrega única validada aqui.
+Não repetimos resultados ambíguos para depender dessa proteção.
+Fonte: [idempotência Brevo](https://developers.brevo.com/docs/heterogenous-versions-batch-emails).
+Chamadas manuais repetidas, concorrentes ou depois dessa janela ainda podem duplicar
+envios; a composição futura precisa de controle durável de solicitações e reconciliação.
+
+A factory é um contexto assíncrono e fecha o cliente ao sair. O adaptador não abre
+transações de banco. A composição futura deve aguardar `gerar_desafio()` terminar
+(commit concluído) **antes** de chamar `enviar_verificacao()`; não executar HTTP dentro
+de `banco.transacao()`. Nunca registrar chave, código, conteúdo integral, destinatário
+completo ou detalhes HTTP do provedor. Erros de aplicação são neutros e não carregam
+corpos de resposta; mantenha desabilitado logging de payload/cabeçalhos por instrumentação externa.
+
+### Testes e próximos passos
+
+```bash
+cd backend
+pip install -e ".[dev]"
+pytest testes/unitarios/teste_envio_brevo.py -q
+pytest
+ruff check .
+ruff format --check .
+```
+
+HTTPX passou de dependência apenas de testes para runtime; nenhum SDK Brevo foi
+adicionado. Os testes de envio usam exclusivamente MockTransport e chaves/dados
+artificiais, nunca conexão ao Brevo. **173 testes backend aprovados, 1 ignorado**,
+incluindo 46 novos; **29 frontend** e **10 E2E Chromium** aprovados. Ruff, ESLint e
+build/TypeScript aprovados, com PostgreSQL 18.6 na regressão das etapas anteriores.
+
+Mocks comprovam payload e política de falhas, não entrega real. Falta validar conta
+Free/remetente reais e renderização em clientes de e-mail em uma homologação autorizada.
+Etapa 4.3: composição após commit, controle durável de envios/reconciliação e política
+pública de solicitação/confirmação/reenvio, preservando não enumeração. Não há filas
+externas, endpoints ou frontend novos nesta entrega.
+Detalhes: [relatório da Fase 4](docs/relatorios/fase4-verificacao-email.md).
+
 ## Arquitetura e próximas etapas
 
 Em `backend/src/aplicacao`: domínio independente, contratos e casos de uso,
@@ -552,9 +648,9 @@ Não foram necessárias novas migrações na Etapa 3.2.
 
 Etapas 3.1–3.5 concluídas no escopo de autenticação e homologação local acima.
 Fase 4: verificação real de e-mail e integração Brevo por abstração.
-Variáveis futuras previstas, ainda não utilizadas: `BREVO_API_KEY`, `EMAIL_REMETENTE`,
-`NOME_REMETENTE` e `URL_PUBLICA_FRONTEND`. Links e analytics também ficam fora do escopo.
+O adaptador usa as variáveis BREVO_* descritas acima. `URL_PUBLICA_FRONTEND` permanece
+reservada a necessidades futuras. Links e analytics continuam fora do escopo.
 
 Resultados e arquivos: [relatório da Fase 3](docs/relatorios/fase3-autenticacao.md).
-Commit sugerido para a Etapa 4.1: `feat: estruturar verificacao de email`.
+Commit sugerido para a Etapa 4.2: `feat: integrar envio de emails com brevo`.
 Nenhum commit, push ou deploy foi executado automaticamente.

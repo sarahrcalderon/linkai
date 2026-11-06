@@ -162,3 +162,119 @@ Frontend permanece executado/testado pelos comandos npm do README. Nenhuma tela 
 
 Commit sugerido: `feat: estruturar verificacao de email`.
 Não houve avanço para a Etapa 4.2, commits, pushes, deploys ou alterações em produção.
+
+## Etapa 4.2 — Adaptador de envio Brevo (06/11/2026)
+
+### Escopo e decisões
+
+Revisados o Protocol ServicoEnvioEmail, DTO DesafioGerado, transações de verificação,
+configuração e dependências antes das alterações. O contrato de retorno None foi
+preservado. Nenhuma entidade/caso de uso chama a API Brevo; a implementação está
+isolada em infraestrutura/brevo. Não foi alterado cadastro/login, endpoint ou tela.
+Nenhuma conta foi criada, plano contratado ou e-mail real enviado.
+
+Foi consultada a documentação primária de [envio transacional](https://developers.brevo.com/reference/send-transac-email)
+e [idempotência](https://developers.brevo.com/docs/heterogenous-versions-batch-emails).
+HTTPX assíncrono já existia no ambiente de testes e passou a dependência de runtime,
+sem adicionar SDK. Endpoint HTTPS fixo, TLS padrão, trust_env=False na factory e
+follow_redirects=False para evitar encaminhar credenciais a outra origem.
+
+ConfiguracaoBrevo é separada da configuração geral. Só a ativação explícita da
+factory exige chave/remetente. Validação protege a chave contra espaços/controles,
+oculta inputs em erros e exclui chave/endereço do repr. Testes com adaptador falso
+não exigem configuração Brevo; a API existente continua iniciando sem ela.
+
+O template tem assunto solicitado, saudação neutra, identificação Linkai, código,
+prazo absoluto UTC e aviso para ignorar mensagem não solicitada. HTML com tabela
+fluida, estilos inline, fonte de 16 px, sem JavaScript ou imagens externas; alternativa
+em texto simples. Nome/código/prazo são escapados no HTML. Corpos ficam protegidos
+por SecretStr na representação interna, sem senha, sessão ou dados desnecessários.
+
+### Retentativas e resultado
+
+- Padrão de 3 tentativas, timeout HTTP por operação de até 10s e orçamento total
+  de 20s por chamada. Prazo restante do código também limita novas tentativas.
+- Falhas anteriores ao envio (ConnectError/ConnectTimeout/PoolTimeout) permitem
+  nova conexão com backoff limitado. Nenhum transporte com retries extras é configurado.
+- 429 respeita Retry-After em segundos ou data HTTP. Ausente/inválido usa backoff.
+  Espera maior que o orçamento interrompe a chamada, sem reenviar antes do permitido.
+- 4xx permanentes, incluindo chave inválida 401/403: sem repetição.
+- 5xx/408, erros de leitura/escrita e resposta ambígua: indeterminado e sem retentativa.
+  É uma escolha conservadora para não duplicar uma operação possivelmente aceita.
+- Somente 201 com messageId não vazio confirma aceitação. 201 incompleto, JSON
+  inválido, 200/202/redirect, duplicate_parameter e 409 não confirmam envio.
+- Payload e UUID em headers.idempotencyKey são estáveis em toda tentativa.
+  A documentação de idempotência descreve batch e TTL de 30 minutos. Não se presume
+  garantia comprovada para este adaptador; duplicatas manuais/concorrentes permanecem
+  possíveis. Não existe controle durável de envios nem garantia exactly-once nesta etapa.
+- O retorno None representa somente aceitação pela API, não entrega no destinatário.
+  O identificador não é persistido e não há webhook de entrega.
+
+As exceções de aplicação são permanentes, temporárias, indeterminadas ou de
+configuração, com mensagens neutras. Não carregam respostas ou destinatários em
+atributos próprios. O adaptador não faz logging de payload/chaves/código.
+Ele não abre transação PostgreSQL; a futura composição deverá chamar o envio após
+o serviço de geração devolver o desafio, quando o commit já terminou.
+
+### Arquivos
+
+Criados, relativos a backend/:
+
+- src/aplicacao/casos_de_uso/erros_envio_email.py — falhas independentes de provedor.
+- src/aplicacao/infraestrutura/brevo/__init__.py.
+- src/aplicacao/infraestrutura/brevo/configuracao.py — configuração opcional.
+- src/aplicacao/infraestrutura/brevo/template.py — HTML e texto.
+- src/aplicacao/infraestrutura/brevo/envio.py — HTTPS e política de falhas.
+- src/aplicacao/infraestrutura/brevo/fabrica.py — ciclo de vida do cliente.
+- testes/unitarios/teste_envio_brevo.py — transporte HTTP simulado, sem rede externa.
+
+Modificados: backend/pyproject.toml, backend/.env.exemplo, README.md e este relatório.
+Adicionada evidência sanitizada da regressão em
+evidencias/fase4/resultado-regressao-e2e-brevo.json. Nenhuma migração nova.
+
+### Validações observadas
+
+- Pytest completo com PostgreSQL **18.6** na regressão: **173 aprovados, 1 ignorado**.
+  O ignorado permanece a variante SQLite de concorrência da Fase 3, não a integração real.
+- **46 testes novos** cobrem payload, 201, contrato 4.1, template/escape, configuração
+  ausente/inválida, timeout, conexão, 429, 500/503, 400/401/403, orçamentos, resposta
+  incompleta, duplicata indeterminada, estabilidade de payload e ausência de segredos.
+- Retry-After enorme não é truncado nem ignorado; 429 persistente encerra após três
+  tentativas. Orçamento total cancela resposta tardia sem confirmar sucesso.
+- Logs do teste de payload foram capturados em DEBUG, sem chave, código, destinatário
+  ou conteúdo. Erros simulados com segredos no corpo não os expõem nas mensagens.
+- Ruff check e format --check aprovados.
+- Frontend: ESLint, **29 testes**, build/TypeScript aprovados.
+- Regressão E2E Chromium existente: **10 aprovados**, sem ativar o adaptador ou
+  realizar envio externo. [Resultado](evidencias/fase4/resultado-regressao-e2e-brevo.json).
+- Permanece aviso Starlette/httpx no TestClient; nenhuma falha de teste pendente.
+
+Todos os testes de envio usam MockTransport; isso não comprova integração em conta
+real nem entrega. PostgreSQL e Chromium foram usados apenas na regressão existente.
+Não foram utilizadas credenciais reais ou consumida cota de e-mail durante pytest.
+O cluster isolado foi desligado após os testes. Não houve acesso a produção.
+
+### Configuração, plano gratuito e pendências
+
+Variáveis: BREVO_API_KEY, BREVO_EMAIL_REMETENTE, BREVO_NOME_REMETENTE,
+BREVO_TIMEOUT_SEGUNDOS, BREVO_LIMITE_TENTATIVAS e BREVO_TEMPO_TOTAL_SEGUNDOS.
+O .env.exemplo contém só placeholders comentados e parâmetros seguros; o README
+contém comandos de instalação/teste, política de falhas e orientação de composição.
+
+Para operação futura, cadastrar e validar o remetente no painel e autenticar o
+domínio conforme os registros fornecidos. [Guia do remetente](https://help.brevo.com/hc/en-us/articles/208836149-Create-a-new-sender-From-name-and-From-email)
+e [guia de domínio](https://help.brevo.com/hc/en-us/articles/12163873383186-Authenticate-your-domain-with-Brevo-Brevo-code-DKIM-DMARC).
+O plano [Free consultado](https://help.brevo.com/hc/en-us/articles/208589409-About-Brevo-s-pricing-plans)
+oferece 300 envios/dia sem acumulação. Nenhum recurso pago, compra de créditos,
+IP dedicado, fila externa ou trial foi configurado; monitoramento da cota é operacional.
+
+Pendências 4.3: composição após commit; controle durável para envios concorrentes
+e reconciliação de resultados incertos; estratégia de entrega/retentativas sem
+guardar código em claro; tratamento público uniforme; confirmação/reenvio públicos
+somente quando autorizados. Não repetir cegamente uma falha indeterminada.
+Ainda falta homologação autorizada com remetente real e clientes de e-mail.
+Não há evidência de entrega real, proteção durável contra duplicatas entre chamadas
+ou renderização efetiva em Gmail/Outlook nesta entrega.
+
+Commit sugerido: `feat: integrar envio de emails com brevo`.
+Sem avanço para endpoints, frontend ou Etapa 4.3. Nenhum commit, push ou deploy.
