@@ -80,9 +80,12 @@ class VerificarEmail:
             )
             await contexto.verificacoes.invalidar_anteriores(usuario_id, agora)
             await contexto.verificacoes.adicionar(desafio)
-            return DesafioGerado(
+            gerado = DesafioGerado(
                 id=desafio.id, usuario_id=usuario_id, expira_em=desafio.expira_em, codigo=codigo
             )
+            if contexto.envios is not None:
+                await contexto.envios.agendar(usuario.email, gerado)
+            return gerado
 
     async def confirmar(self, usuario_id: UUID, codigo: str) -> bool:
         async with self.transacoes() as contexto:

@@ -1,0 +1,56 @@
+{
+  "resultado": "passed",
+  "duracaoMs": 14479.152,
+  "testes": [
+    {
+      "teste": "cadastro 202 uniforme, validação e conta não verificada",
+      "resultado": "passed",
+      "duracaoMs": 1025
+    },
+    {
+      "teste": "credenciais incorretas e conta inexistente permanecem genéricas",
+      "resultado": "passed",
+      "duracaoMs": 501
+    },
+    {
+      "teste": "cookie HttpOnly, CSRF, CORS, reload, logout e revogação reais",
+      "resultado": "passed",
+      "duracaoMs": 484
+    },
+    {
+      "teste": "rota privada sem autenticação e histórico de navegação",
+      "resultado": "passed",
+      "duracaoMs": 290
+    },
+    {
+      "teste": "sessão expirada no PostgreSQL remove acesso",
+      "resultado": "passed",
+      "duracaoMs": 1057
+    },
+    {
+      "teste": "falha de conexão e indisponibilidade real do banco falham com segurança",
+      "resultado": "passed",
+      "duracaoMs": 2084
+    },
+    {
+      "teste": "375, 768 e 1440 px, temas, foco, teclado e evidências visuais",
+      "resultado": "passed",
+      "duracaoMs": 3030
+    },
+    {
+      "teste": "loading real e bloqueio de múltiplos envios",
+      "resultado": "passed",
+      "duracaoMs": 365
+    },
+    {
+      "teste": "limite de tentativas permanece ativo",
+      "resultado": "passed",
+      "duracaoMs": 201
+    },
+    {
+      "teste": "logs da API não registram credenciais ou tokens",
+      "resultado": "passed",
+      "duracaoMs": 2
+    }
+  ]
+}

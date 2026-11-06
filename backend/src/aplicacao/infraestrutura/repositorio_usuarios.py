@@ -35,6 +35,7 @@ class RepositorioUsuariosSQLAlchemy:
 
     async def obter_para_atualizacao(self, identificador: UUID) -> Usuario | None:
         consulta = select(ModeloUsuario).where(ModeloUsuario.id == identificador).with_for_update()
+        consulta = consulta.execution_options(populate_existing=True)
         return self._converter(await self.sessao.scalar(consulta))
 
     async def marcar_email_verificado(self, identificador: UUID, agora: datetime) -> None:

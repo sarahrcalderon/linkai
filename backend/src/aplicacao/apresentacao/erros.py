@@ -41,6 +41,15 @@ def registrar_tratamento_erros(app: FastAPI) -> None:
             "senha": "Informe uma senha com 12 a 128 caracteres, sem caracteres de controle.",
         }
         mensagem_corpo = "Envie apenas nome, e-mail e senha em um objeto JSON válido."
+        if requisicao.url.path.rstrip("/") in {
+            "/api/autenticacao/verificar-email",
+            "/api/autenticacao/reenviar-codigo",
+        }:
+            mensagens = {
+                "email": mensagens["email"],
+                "codigo": "Informe um código de seis dígitos.",
+            }
+            mensagem_corpo = "Envie apenas os campos previstos para a verificação."
         if requisicao.url.path.rstrip("/") == "/api/autenticacao/login":
             mensagens.pop("nome")
             mensagens["senha"] = "Informe uma senha com 1 a 128 caracteres."

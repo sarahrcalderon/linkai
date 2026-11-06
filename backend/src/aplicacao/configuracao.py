@@ -22,6 +22,11 @@ class Configuracao(BaseSettings):
     verificacao_intervalo_reenvio: int = Field(default=60, ge=1, le=86400)
     verificacao_limite_envios: int = Field(default=5, ge=1, le=100)
     verificacao_janela_envios: int = Field(default=3600, ge=60, le=86400)
+    verificacao_limite_requisicoes: int = Field(default=20, ge=1, le=100)
+    outbox_chave: SecretStr | None = Field(default=None, repr=False)
+    outbox_lease_segundos: int = Field(default=120, ge=90, le=600)
+    outbox_limite_tentativas: int = Field(default=5, ge=1, le=10)
+    outbox_intervalo_worker: float = Field(default=1, gt=0, le=60)
 
     @property
     def cookie_seguro(self) -> bool:

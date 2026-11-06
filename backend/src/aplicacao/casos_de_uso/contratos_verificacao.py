@@ -28,6 +28,7 @@ class UsuariosParaVerificacao(Protocol):
 class ContextoVerificacao:
     usuarios: UsuariosParaVerificacao
     verificacoes: RepositorioVerificacoes
+    envios: "AgendadorEnvioEmail | None" = None
 
 
 class TransacoesVerificacao(Protocol):
@@ -46,3 +47,7 @@ class DesafioGerado(BaseModel):
 
 class ServicoEnvioEmail(Protocol):
     async def enviar_verificacao(self, destinatario: str, desafio: DesafioGerado) -> None: ...
+
+
+class AgendadorEnvioEmail(Protocol):
+    async def agendar(self, destinatario: str, desafio: DesafioGerado) -> None: ...

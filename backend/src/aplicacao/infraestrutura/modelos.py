@@ -9,6 +9,7 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    Text,
     Uuid,
     false,
     text,
@@ -91,3 +92,36 @@ class ModeloVerificacaoEmail(Base):
     invalidado_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     tentativas: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     limite_tentativas: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class ModeloEntregaEmail(Base):
+    __tablename__ = "outbox_email"
+    __table_args__ = (
+        CheckConstraint("tentativas >= 0", name="ck_outbox_tentativas"),
+        CheckConstraint(
+            "estado IN ('pendente','processando','enviada','falha','indeterminada','cancelada')",
+            name="ck_outbox_estado",
+        ),
+        Index("ix_outbox_prontas", "estado", "proxima_tentativa"),
+    )
+    id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("verificacoes_email.id", ondelete="CASCADE"), primary_key=True
+    )
+    dados_cifrados: Mapped[str | None] = mapped_column(Text)
+    estado: Mapped[str] = mapped_column(String(20), nullable=False, server_default="pendente")
+    tentativas: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expira_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    proxima_tentativa: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    arrendado_ate: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    posse: Mapped[UUID | None] = mapped_column(Uuid)
+    envio_iniciado_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ultima_falha: Mapped[str | None] = mapped_column(String(40))
+
+
+class ModeloLimiteRequisicoes(Base):
+    __tablename__ = "limites_requisicoes"
+    __table_args__ = (CheckConstraint("tentativas > 0", name="ck_limite_tentativas"),)
+    chave: Mapped[str] = mapped_column(String(64), primary_key=True)
+    inicio: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    tentativas: Mapped[int] = mapped_column(Integer, nullable=False)

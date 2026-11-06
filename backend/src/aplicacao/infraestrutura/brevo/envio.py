@@ -140,5 +140,5 @@ class EnvioEmailBrevo:
                 prazo - self.cronometro(), (desafio.expira_em - self.relogio()).total_seconds()
             )
             if tentativa == self.configuracao.limite_tentativas or espera >= restante:
-                raise EnvioEmailTemporario()
+                raise EnvioEmailTemporario(aguardar_segundos=espera)
             await self.esperar(espera)

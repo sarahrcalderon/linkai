@@ -278,3 +278,178 @@ ou renderização efetiva em Gmail/Outlook nesta entrega.
 
 Commit sugerido: `feat: integrar envio de emails com brevo`.
 Sem avanço para endpoints, frontend ou Etapa 4.3. Nenhum commit, push ou deploy.
+
+## Etapa 4.3 — Cadastro, confirmação e reenvio (06/11/2026)
+
+### Diagnóstico e decisões
+
+Inspecionados cadastro, contratos, transações de verificação, SQLAlchemy, limites,
+composição FastAPI e Brevo antes das alterações. A API ainda não gerava desafios
+ou intenções; o envio era um adaptador opcional. Não havia outbox/worker durável.
+
+O cadastro público mantém 202 e corpo anteriores. Composição injeta geração de
+desafio e agendamento na mesma AsyncSession: usuário, HMAC e envelope cifrado
+são commitados juntos. Duplicata não gera intenção, mesmo não verificada; reenvio
+é explícito. Falha de persistência/commit retorna 503 sem cadastro parcial.
+Nenhuma sessão é criada no cadastro ou confirmação.
+
+Novos contratos:
+
+| Endpoint | Entrada | Saída |
+| --- | --- | --- |
+| POST /api/autenticacao/verificar-email | email normalizado, codigo string de 6 dígitos ASCII | 200 e mensagem de confirmação; 400 genérico para incorreto/expirado/usado/conta indisponível |
+| POST /api/autenticacao/reenviar-codigo | email normalizado | 202 neutro para existente/inexistente/verificado/cooldown |
+
+Erros de validação são 422, limite 429/Retry-After e banco indisponível 503.
+Mensagens não refletem códigos ou existência de contas; confirmação válida prova
+posse do código, sem autenticar. O contador de erros é commitado mesmo na resposta 400.
+Confirmações concorrentes têm um sucesso; reutilização é recusada.
+Validade, tentativas e controles de reenvio da 4.1 foram preservados.
+
+### Outbox
+
+Migração 0004 cria outbox_email e limites_requisicoes, com PK/FK, índices para
+reserva/prazo e restrições de estados/contadores. Nenhum código em claro na outbox:
+Fernet da biblioteca cryptography protege destinatário e DTO, com autenticação e
+vínculo do UUID do desafio no envelope. Uma intenção por desafio, pela PK/FK.
+HMAC e cifra usam chaves diferentes, somente no ambiente. Nenhuma criptografia própria.
+
+O domínio define a reserva/contrato; aplicação ProcessarEmails coordena envio por
+Protocol. Infraestrutura implementa persistência/leases, cifra e CLI. Nenhuma
+entidade importa aplicação, FastAPI ou SQLAlchemy. O cadastro usa uma porta assíncrona,
+e o serviço de verificação recebe um agendador abstrato no contexto transacional.
+
+Reserva com SKIP LOCKED é commitada; preflight com bloqueio do usuário valida
+estado atual, desafio e token de posse e marca envio_iniciado_em, também commitado.
+Não há transação aberta enquanto o serviço externo é chamado. O resultado é gravado
+em outra transação, condicionado à posse. Estado/posse impedem ack de worker obsoleto.
+
+- pendente → processando → enviada/falha/indeterminada/cancelada.
+- Temporário conhecido → pendente com backoff limitado e Retry-After preservado.
+- Lease expirado antes do início → retomável; depois do início → indeterminada.
+- Cancelamento durante envio → indeterminada, sem repetição.
+- Verificação usada, expirada, inválida ou usuário já verificado/inativo → cancelada.
+- Envelope removido em todo estado terminal. Logs não recebem conteúdo, código,
+  credenciais, resposta externa ou endereço do destinatário.
+
+Aceitação Brevo não prova entrega. A marcação anterior ao HTTPS deixa uma janela
+de incerteza deliberada: queda ali pode não ter enviado nada, mas não se repete
+automaticamente. Queda após aceitação antes do ack também não repete. Não há
+garantia de exactly-once/at-least-once; prioriza-se evitar duplicação cega.
+E-mails já em voo podem chegar com código invalidado por reenvio, sem poder confirmar.
+
+### Segurança e configuração
+
+HMAC VERIFICACAO_SEGREDO passa a ser necessário ao limitador persistente de
+cadastro/login/confirmar/reenvio. OUTBOX_CHAVE, Fernet estável, é exigida para
+cadastro/reenvio e worker; confirmação não depende da cifra ou do Brevo.
+Não há fallback de chaves efêmeras na aplicação: configuração ausente falha segura.
+Fixtures fornecem chaves aleatórias por teste, e o E2E usa somente chaves efêmeras
+nos processos de homologação, sem persistir valores em arquivos versionados.
+
+Contadores PostgreSQL por IP/rota usam HMAC e UPSERT atômico, commitado antes de
+processar o corpo, incluindo requisições inválidas. Operam entre processos;
+limitador em memória permanece como proteção complementar. Origem HTTP presente
+e não permitida é rejeitada; CORS explícito, cookies e CSRF existentes foram preservados.
+Login/logout mantêm sua exigência de Origin. Rotas públicas não exigem cookie.
+
+Novos parâmetros: OUTBOX_CHAVE, OUTBOX_LEASE_SEGUNDOS=120,
+OUTBOX_LIMITE_TENTATIVAS=5, OUTBOX_INTERVALO_WORKER=1 e
+VERIFICACAO_LIMITE_REQUISICOES=20 por 15 minutos. Limites de cadastro/login preservados.
+Lease precisa superar o orçamento HTTPS + 15s. Worker reutiliza BREVO_* da 4.2.
+Backoff é 30s exponencial, limitado a 900s; respeita esperas maiores do provedor
+ou encerra se o código expirar. No máximo cinco ciclos por mensagem, por padrão.
+
+### Execução e interrupção
+
+```bash
+cd backend
+pip install -e ".[dev]"
+alembic upgrade head
+uvicorn aplicacao.principal:app --reload --no-proxy-headers
+```
+
+Em outro terminal com o mesmo banco/chaves e BREVO_* configurado:
+
+```bash
+python -m aplicacao.infraestrutura.worker_emails
+```
+
+Esse comando pode enviar e-mails reais quando configurado. Não foi executado com
+Brevo real durante os testes. Ctrl+C/SIGINT e SIGTERM solicitado deixam de consumir
+e aguardam operação corrente; encerramento forçado é tratado pelo lease na retomada.
+Sinais são configurados pela CLI; testes cobrem cancelamento/leases, não um processo
+real habilitado com credenciais Brevo. Perda/rotação da chave pode impedir a leitura
+de pendências; operação deve preservar chaves ou solicitar novos desafios.
+
+### Validações observadas
+
+PostgreSQL **18.6**, bancos locais exclusivos linkai_homologacao e linkai_e2e.
+Fixtures usam migrações reais/schemas isolados; nenhum banco de produção.
+
+- **196 testes backend aprovados, 1 ignorado**. O ignorado permanece a variante
+  SQLite de concorrência da Fase 3; os novos testes transacionais são PostgreSQL.
+- 23 testes novos: 20 casos PostgreSQL e 3 unitários de cifra/chave.
+- Cadastro novo/duplicado/concorrente: 202 uniforme, um usuário/desafio/intenção.
+- Confirmação válida/inválida/expirada/usada; cinco erros persistidos; login
+  bloqueado antes e permitido após confirmação explícita, sem cookie automático.
+- Reenvio inexistente e existente: mesma resposta; cooldown e três reenvios
+  concorrentes criam somente um novo desafio e cancelam a intenção anterior.
+- Falha na inserção da outbox reverte tudo; trigger adiado até o COMMIT também
+  reverte usuário, desafio e intenção e não devolve sucesso antecipado.
+- Duas instâncias compartilham o limite persistente. Origem hostil não enfileira.
+- Dois workers reais sobre PostgreSQL processam a mesma intenção uma única vez.
+- Interrupção antes/depois de início simula lease expirado no banco; retomada ou
+  indeterminação corretas e ack antigo sem efeito. Cancelamento não reenvia.
+- Sender falso consulta pg_stat_activity durante envio: nenhuma conexão idle in
+  transaction. Conteúdo removido após terminal; cifra adulterada/trocada de registro recusada.
+- Brevo via MockTransport: 201 aceito, 400 terminal, 503 indeterminado, 429 reprogramado.
+  Retry-After de 80s foi respeitado; limite de ciclos encerra e remove conteúdo.
+- Ruff check e format --check aprovados.
+- Frontend: **29 testes**, ESLint, build/TypeScript e Prettier aprovados; tipos E2E aprovados.
+- **10 E2E Chromium existentes aprovados**, sem iniciar worker ou realizar envio externo.
+- Alembic pela CLI: **0004 (head) → 0003 → 0004 (head)**. Teste automatizado
+  preserva desafio/usuário ao reverter somente 0004 e compara metadados após recriar.
+- Permanece aviso de depreciação Starlette/httpx; nenhuma falha de teste pendente.
+
+Testes de Brevo usam somente mocks; não comprovam entrega. Nenhum e-mail real foi
+enviado ou credencial real usada. API/Vite e cluster local foram encerrados ao final.
+Resultado sanitizado: [regressão E2E](evidencias/fase4/resultado-regressao-e2e-4.3.json).
+
+### Arquivos
+
+Criados em backend/src/aplicacao:
+
+- dominio/entrega_email.py.
+- casos_de_uso/contratos_entrega.py, processar_emails.py e solicitacoes_email.py.
+- infraestrutura/agendador_email.py, cifra_outbox.py, composicao_verificacao.py,
+  limite_persistente.py, repositorio_entregas.py e worker_emails.py.
+- infraestrutura/migracoes/versions/0004_criar_outbox.py.
+- apresentacao/protecao_persistente.py, schemas_verificacao.py e rotas/verificacao_email.py.
+
+Modificados no backend: configuração, modelos, repositório de usuários para
+releitura sob bloqueio, cadastro e suas dependências, contexto/serviço de verificação,
+registro de rotas/middlewares e validação de erros. Exceção temporária e adaptador
+Brevo propagam Retry-After numérico ao worker, sem detalhes sensíveis.
+pyproject.toml adiciona cryptography; .env.exemplo documenta parâmetros.
+
+Testes: novo conftest.py, teste_fluxo_email.py e teste_cifra_outbox.py; migrações e
+fixture E2E ajustadas para novas tabelas. frontend/playwright.config.ts recebe
+somente chaves de teste; nenhuma interface React foi alterada. README e este
+relatório atualizados, com JSON sanitizado da regressão.
+
+### Limites e Etapa 4.4
+
+Ainda não há interface React para confirmar/reenviar, reconciliação automática de
+indeterminadas, webhook de entrega ou homologação autorizada em conta Brevo real.
+Retenção de outbox/contadores e rotação de chaves precisam de operação planejada.
+Não remover histórico de verificações dentro da janela nem reenviar manualmente
+mensagens indeterminadas às cegas. Logs operacionais são neutros; o estado da fila
+é consultável por contagens, sem expor destinatários/códigos.
+
+O fluxo está homologado localmente nos cenários executados, sem garantia de entrega
+real. Pendências de HTTPS/outros navegadores/dispositivos e auditoria de ferramentas
+das fases anteriores continuam válidas. Etapa 4.4 não iniciada.
+
+Commit sugerido: `feat: implementar confirmacao de email`.
+Nenhum commit, push, deploy ou alteração em produção foi realizado.

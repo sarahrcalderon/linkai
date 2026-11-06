@@ -13,7 +13,8 @@ class EnvioEmailPermanente(FalhaEnvioEmail):
 
 
 class EnvioEmailTemporario(FalhaEnvioEmail):
-    def __init__(self) -> None:
+    def __init__(self, aguardar_segundos: float | None = None) -> None:
+        self.aguardar_segundos = aguardar_segundos
         super().__init__("Serviço de e-mail temporariamente indisponível.")
 
 

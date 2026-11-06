@@ -21,6 +21,9 @@ pip install -e ".[dev]"
 Copie `.env.exemplo` para `.env`, configure um PostgreSQL local dedicado chamado
 `linkai`, e preencha a conexão somente no arquivo local ignorado pelo Git.
 O usuário do banco precisa criar tabelas e índices para aplicar migrações.
+Desde a Etapa 4.3, configure também VERIFICACAO_SEGREDO e OUTBOX_CHAVE estáveis
+antes de usar cadastro/reenvio; veja a seção 4.3. Sem as chaves exigidas, a operação
+falha com 503, sem persistir um cadastro parcial. A API não gera chaves temporárias.
 
 | Variável | Uso |
 | --- | --- |
@@ -638,6 +641,146 @@ pública de solicitação/confirmação/reenvio, preservando não enumeração. 
 externas, endpoints ou frontend novos nesta entrega.
 Detalhes: [relatório da Fase 4](docs/relatorios/fase4-verificacao-email.md).
 
+## Etapa 4.3 — Cadastro, confirmação e outbox transacional
+
+Os contratos anteriores continuam válidos. O cadastro 202 agora persiste usuário
+não verificado, desafio HMAC e intenção de envio **na mesma transação**, sem chamar
+Brevo ou criar sessão. Duplicatas recebem o mesmo 202 e não geram outro desafio ou
+e-mail, inclusive quando a conta já está verificada. Use o endpoint próprio para reenvio.
+
+| Método e rota | Entrada JSON | Resultado |
+| --- | --- | --- |
+| POST `/api/autenticacao/verificar-email` | `email`, `codigo` (string de seis dígitos ASCII) | 200 se confirmado; 400 genérico para código incorreto, expirado, usado ou conta indisponível |
+| POST `/api/autenticacao/reenviar-codigo` | `email` | 202 uniforme para conta existente, inexistente, já verificada ou cooldown |
+
+Sucesso de confirmação: `{"mensagem":"E-mail verificado. Entre na sua conta para continuar."}`.
+Erro: `{"erro":{"codigo":"verificacao_invalida","mensagem":"Código inválido ou indisponível."}}`.
+Reenvio: `{"mensagem":"Solicitação recebida. Se aplicável, um código será enviado."}`.
+Não há cookie/sessão automática; após confirmar, faça login normalmente.
+Campos inválidos recebem 422 sem refletir valores. Excesso de requisições recebe
+429/Retry-After; indisponibilidade do banco retorna 503 sem confirmação parcial.
+As respostas usam no-store. Confirmações concorrentes têm apenas um sucesso.
+
+O limite de cinco erros, validade de dez minutos, cooldown de sessenta segundos
+e cinco emissões por hora continuam configuráveis. O reenvio invalida os desafios
+anteriores e cancela intenções antigas ainda não iniciadas. Um e-mail já em voo
+pode chegar com código antigo, que não poderá confirmar a conta.
+
+### Chaves e configuração
+
+Mantenha duas chaves independentes, estáveis e fora do Git:
+
+- `VERIFICACAO_SEGREDO`: aleatório, pelo menos 32 bytes, para HMAC e pseudonimização
+  dos contadores de requisição. Também necessário ao limitador persistente de login.
+- `OUTBOX_CHAVE`: chave Fernet, necessária para cadastro/reenvio e para o worker.
+  A confirmação precisa somente do segredo HMAC e do banco, não do cliente Brevo.
+
+Para gerar valores locais em memória, sem exibir no terminal, a partir de backend:
+
+```powershell
+$env:VERIFICACAO_SEGREDO = & .venv/Scripts/python.exe -c "import secrets; print(secrets.token_urlsafe(32))"
+$env:OUTBOX_CHAVE = & .venv/Scripts/python.exe -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+Gere uma vez e guarde no gerenciador de segredos/ambiente privado usado pelos
+processos. Não regenere em cada reinício. API e worker devem receber a mesma chave
+Fernet; perder ou trocar a chave com mensagens pendentes impede sua leitura.
+Rotação com múltiplas chaves ainda não foi implementada. Não copie as chaves das fixtures.
+
+| Variável | Padrão |
+| --- | --- |
+| `OUTBOX_LEASE_SEGUNDOS` | 120; mínimo 90 e maior que orçamento HTTPS + 15s |
+| `OUTBOX_LIMITE_TENTATIVAS` | 5 ciclos de processamento |
+| `OUTBOX_INTERVALO_WORKER` | 1s quando não há trabalho |
+| `VERIFICACAO_LIMITE_REQUISICOES` | 20 requisições por IP/rota em 15 minutos |
+
+### Outbox e worker
+
+Migração **0004** cria `outbox_email` e `limites_requisicoes`. A outbox mantém
+destinatário, código e DTO exclusivamente em envelope Fernet autenticado, vinculado
+ao UUID do desafio. Estados: pendente, processando, enviada, falha, indeterminada
+e cancelada. O envelope é removido ao chegar a estado terminal.
+
+Reservas usam SELECT FOR UPDATE SKIP LOCKED, token de posse e prazo. Antes do HTTPS,
+outra transação verifica usuário/desafio e marca o início do envio. Ambas terminam
+antes da chamada externa. Ao retornar, o token impede uma resposta de worker antigo
+de sobrescrever o estado de outro proprietário.
+
+- Queda antes de marcar início: lease expirado permite retomar com segurança.
+- Queda/cancelamento depois da marcação: fica indeterminada, sem reenvio automático.
+- Erro permanente: falha terminal. Aceitação Brevo: enviada, **sem comprovar entrega**.
+- Erro temporário conhecido: backoff de 30s, 60s, 120s etc., limitado a 900s, até
+  cinco ciclos por padrão e sempre antes da expiração. Retry-After maior é respeitado;
+  se exceder a validade, não há nova tentativa.
+
+Não há promessa de exactly-once ou entrega garantida. Uma queda entre a marcação e
+o HTTPS pode deixar resultado indeterminado mesmo sem envio. Se Brevo aceitou e o
+processo caiu antes do registro, a outbox também fica indeterminada. A recuperação
+prioriza não reenviar às cegas; o usuário pode solicitar novo desafio após os controles.
+
+Execute em terminais separados, com URL_BANCO e chaves compartilhadas:
+
+```bash
+cd backend
+pip install -e ".[dev]"
+alembic upgrade head
+uvicorn aplicacao.principal:app --reload --no-proxy-headers
+```
+
+No terminal do worker, configure também BREVO_* conforme a Etapa 4.2:
+
+```bash
+cd backend
+python -m aplicacao.infraestrutura.worker_emails
+```
+
+**O worker configurado com Brevo real envia e-mails reais.** Não o inicie em testes
+automatizados; estes usam adaptadores falsos ou MockTransport. API não exige chave
+Brevo nem inicia worker. Para parar, use Ctrl+C (SIGINT), ou SIGTERM em sistemas
+que o entregam: o loop deixa de reservar e aguarda a operação corrente finalizar.
+Encerramento forçado usa a recuperação por lease na próxima execução.
+
+### Proteção persistente e operação
+
+Cadastro, login, confirmação e reenvio têm contador PostgreSQL atômico por IP/rota,
+independente da transação de negócio. Ele contabiliza também dados inválidos e
+continua funcionando entre processos/reinícios. IP fica somente como HMAC; o
+limitador em memória permanece como barreira adicional. Cadastro/login usam os
+limites já configurados; confirmação/reenvio usam o novo limite acima.
+Origin presente e não autorizado é rejeitado antes do processamento. Clientes
+não browser podem omitir Origin nas rotas públicas; login/logout mantêm suas
+exigências anteriores. Cookies, CSRF de logout e CORS explícito foram preservados.
+
+Monitoramento local sem dados sensíveis:
+
+```sql
+SELECT estado, count(*) FROM outbox_email GROUP BY estado;
+```
+
+Falhas são guardadas somente por categoria neutra. Defina retenção para registros
+terminais e contadores antigos; não apague histórico de verificações dentro da janela
+de emissões. Mantenha relógios UTC sincronizados e as chaves protegidas e recuperáveis.
+Falha ao decifrar deixa a mensagem em falha, sem conteúdo nem envio; solicite um
+novo desafio depois de corrigir a configuração, sem reenfileirar a mensagem às cegas.
+
+### Validação e pendências
+
+**196 testes backend aprovados, 1 ignorado**, em PostgreSQL 18.6 real; **29 frontend**
+e **10 E2E Chromium** aprovados. Ruff, ESLint, TypeScript/build e Prettier aprovados.
+Migração executada como `0004 → 0003 → 0004`, com teste de preservação dos desafios
+anteriores na reversão. Testes incluem workers concorrentes, lease/fencing, cancelamento,
+rollback até no commit, Brevo simulado, conteúdo cifrado, não enumeração e limites
+compartilhados entre duas instâncias. Nenhum e-mail real foi enviado na validação.
+
+Para executar testes: `pytest`, `ruff check .` e `ruff format --check .` no backend;
+`npm run lint`, `npm run test` e `npm run build` no frontend. PostgreSQL de testes
+usa URL_BANCO_TESTE; comandos E2E continuam na seção 3.5.
+
+Pendências 4.4: experiência React de confirmação/reenvio, homologação autorizada de
+entrega real e operação de monitoramento/reconciliação. Retenção e rotação de chaves
+continuam exigindo planejamento; não há telas administrativas, webhook ou reconciliação
+automática de mensagens indeterminadas. Relatório: [Fase 4](docs/relatorios/fase4-verificacao-email.md).
+
 ## Arquitetura e próximas etapas
 
 Em `backend/src/aplicacao`: domínio independente, contratos e casos de uso,
@@ -652,5 +795,5 @@ O adaptador usa as variáveis BREVO_* descritas acima. `URL_PUBLICA_FRONTEND` pe
 reservada a necessidades futuras. Links e analytics continuam fora do escopo.
 
 Resultados e arquivos: [relatório da Fase 3](docs/relatorios/fase3-autenticacao.md).
-Commit sugerido para a Etapa 4.2: `feat: integrar envio de emails com brevo`.
+Commit sugerido para a Etapa 4.3: `feat: implementar confirmacao de email`.
 Nenhum commit, push ou deploy foi executado automaticamente.

@@ -1,5 +1,6 @@
 import { defineConfig } from '@playwright/test';
 import { resolve } from 'node:path';
+import { randomBytes } from 'node:crypto';
 
 const python = process.env.E2E_PYTHON || resolve('../backend/.venv/Scripts/python.exe');
 const urlBanco = process.env.URL_BANCO_E2E || '';
@@ -40,6 +41,8 @@ export default defineConfig({
       env: {
         URL_BANCO: urlBanco,
         AMBIENTE: 'teste',
+        VERIFICACAO_SEGREDO: randomBytes(32).toString('base64url'),
+        OUTBOX_CHAVE: randomBytes(32).toString('base64').replaceAll('+', '-').replaceAll('/', '_'),
         ORIGENS_PERMITIDAS: '["http://127.0.0.1:15173"]',
         CADASTRO_LIMITE_TENTATIVAS: '5',
         CADASTRO_JANELA_SEGUNDOS: '900',
