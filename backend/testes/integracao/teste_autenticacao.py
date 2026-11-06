@@ -413,6 +413,8 @@ async def test_infraestrutura_sessao_indisponivel_falha_fechada(ambiente_autenti
         ]
         for resposta in respostas:
             assert resposta.status_code == 503
+            assert resposta.headers["access-control-allow-origin"] == "http://localhost:5173"
+            assert resposta.headers["access-control-allow-credentials"] == "true"
             assert resposta.json()["erro"]["codigo"] == "servico_indisponivel"
             assert "set-cookie" not in resposta.headers
             assert "SELECT" not in resposta.text and "Traceback" not in resposta.text

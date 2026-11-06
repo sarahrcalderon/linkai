@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import SQLAlchemyError
 
 from aplicacao.casos_de_uso.contratos_autenticacao import (
     CredenciaisInvalidas,
@@ -59,6 +60,8 @@ def registrar_tratamento_erros(app: FastAPI) -> None:
             )
         return resposta_erro("dados_invalidos", "Revise os dados informados.", 422, campos=campos)
 
+    # Exceções de banco são tratadas dentro do ExceptionMiddleware, antes do CORS.
+    @app.exception_handler(SQLAlchemyError)
     @app.exception_handler(Exception)
     async def tratar_falha(requisicao: Request, erro: Exception):
         return resposta_erro(

@@ -468,3 +468,164 @@ encerrada após a validação, preservando dados locais e serviços preexistente
 Commit sugerido: `feat: integrar autenticacao ao frontend`.
 Nenhum commit, push, deploy ou alteração em produção foi realizado.
 Não houve avanço para a Etapa 3.5 ou Fase 4.
+
+## Etapa 3.5 — Homologação e estabilização (05/11/2026)
+
+### Diagnóstico e ambiente
+
+Código de frontend, contratos da API, cookies, CORS, tratamento de erros, fixtures,
+migrações e configurações foram revisados antes das alterações. O repositório
+estava sem alterações locais. Não havia Playwright nem Chromium instalados no
+frontend; foram preparados para esta homologação, sem publicação ou serviços pagos.
+
+- Windows, Node 24.21.0, Python do venv existente e PostgreSQL **18.6** confirmado
+  por consulta SQL. Cluster isolado em 127.0.0.1:55432, sem tocar nos serviços existentes.
+- Banco exclusivo **linkai_e2e**, distinto de linkai_homologacao usado na regressão.
+  Migração corrente 0002. Fixture verificada criada diretamente no banco exclusivo,
+  com senha aleatória mantida em memória e sem endpoint público de ativação.
+- FastAPI/Uvicorn em 127.0.0.1:18000 e React/Vite em 127.0.0.1:15173. Processos
+  iniciados pelo Playwright e encerrados ao terminar; sem reutilizar serviços existentes.
+- CORS permite somente http://127.0.0.1:15173, com credenciais. Cookies HTTP locais
+  HttpOnly, SameSite=Lax, Path=/api e host-only. AMBIENTE=teste. Secure continua
+  obrigatório no modo de produção; nenhuma proteção foi removida.
+- Limites normais ativos: cadastro 5/900s e login 10/900s, sem zerar ou aumentar
+  limites para passar a suíte. Os E2E usam um worker e cenários sequenciais.
+- Playwright **1.65.0**, Chromium headless **158.0.8127.18**, realmente executado.
+  Viewports 375, 768 e 1440 px, altura de 900 px, temas claro e escuro.
+
+### Resultados efetivamente executados
+
+| Verificação | Resultado |
+| --- | --- |
+| E2E Chromium | **10 testes aprovados**, cobrindo os 15 cenários de autenticação solicitados |
+| Pytest com PostgreSQL real | **103 aprovados, 1 ignorado**; apenas a variante SQLite da concorrência já documentada |
+| Ruff | check e format --check aprovados |
+| Frontend Vitest | **29 aprovados**, com Vitest 4.1.12 |
+| ESLint | Aprovado |
+| TypeScript | Build da aplicação e `test:e2e:tipos` aprovados |
+| Vite build | Aprovado |
+| Prettier | format:check aprovado |
+| Auditoria npm de produção | `npm audit --omit=dev --json`: **zero avisos** |
+
+Os E2E não substituem o servidor por respostas de sucesso simuladas. API e banco
+são reais. Interceptação é usada somente para abortar conexão e para atrasar o
+envio no teste de loading, continuando a requisição real depois do atraso.
+
+### Cobertura no navegador
+
+1. Cadastro inválido associa erro aos três campos e foca o primeiro, sem envio.
+2. Cadastro válido e duplicado recebem 202 e mensagem idêntica, sem revelar existência
+   da conta, criar sessão ou afirmar envio de e-mail. Campo de senha limpo depois.
+3. Conta recém-cadastrada, credenciais incorretas e conta inexistente não entram;
+   respostas permanecem genéricas e o navegador fica no login.
+4. Fixture verificada faz login real; JSON contém apenas usuário público e CSRF,
+   sem senha/hash/token de autenticação. Cache-Control no-store confirmado.
+5. Cookie obtido no contexto Chromium confirma HttpOnly, host, Path, SameSite e
+   prazo. Não há credenciais/CSRF em localStorage/sessionStorage; só tema é persistido.
+6. Reload mantém sessão. Logout sem CSRF recebe 403; logout pela interface envia
+   o cabeçalho e recebe 204. Cookie removido; replay do token em memória recebe 401.
+7. Preflight de origem maliciosa rejeitado sem Access-Control-Allow-Origin;
+   Chromium bloqueia leitura de fetch originado de documento em origem opaca.
+8. Acesso privado sem sessão redireciona; links, histórico e retorno ao início funcionam.
+9. Expiração provocada diretamente na sessão PostgreSQL remove o acesso e pede login.
+10. Falha de conexão tem feedback sem exibir dados privados. Suspensão real das
+    conexões de linkai_e2e e encerramento de seus backends provoca 503; restauração
+    em finally permite confirmar a mesma sessão novamente.
+11. Loading desabilita o envio e campos; rate limiting continua devolvendo 429.
+12. Logs efetivos da API foram varridos: senha de fixture, URL com credencial,
+    cookie e resumos/tokens não foram encontrados. Logs brutos ficam ignorados.
+
+### UX, responsividade e evidências
+
+Nas três larguras, cadastro, login e conta foram exercitados nos dois temas:
+sem overflow horizontal, controles com altura mínima de 44 px, fonte de campos
+de pelo menos 16 px e foco visível por navegação Tab entre e-mail e senha.
+As telas preservam cabeçalho, tipografia, cartões, estados e espaçamentos existentes.
+Sidebar/menu lateral não existem no escopo atual: marcados como não aplicáveis,
+sem criar componentes de negócio novos. Navegação existente permanece funcional.
+
+Foram produzidas **18 capturas** e resultados JSON, sem credenciais preenchidas,
+cookies ou tokens. O e-mail da fixture na tela de conta foi mascarado. Foram
+inspecionadas visualmente capturas representativas de celular, tablet e desktop.
+O contraste do botão principal medido pelo Chromium ficou em **5,36:1** em todas
+as combinações; o valor anterior observado era 3,65:1.
+
+- [Índice das evidências](evidencias/fase3/README.md).
+- [Resultados dos testes](evidencias/fase3/resultado-e2e.json).
+- [Navegador e viewports](evidencias/fase3/ambiente-navegador.json).
+- [Medições de contraste](evidencias/fase3/medidas-layout.json).
+
+Traces, vídeos e storageState não foram gravados. O relator sanitiza erros e
+grava somente nomes dos cenários, resultado e duração; artefatos temporários
+Playwright são descartados. Os JSON não contêm cabeçalhos nem corpos de login.
+
+### Problemas encontrados e correções
+
+- **Contraste:** texto branco no botão esmeralda 600 teve 3,65:1. O botão reutilizável
+  e o CTA passaram para esmeralda 700/hover 800, atingindo 5,36:1, sem redesenho.
+- **Erro de banco e CORS:** o handler genérico de Exception era executado fora do
+  CORS, então o navegador não conseguia ler o 503 de falha SQLAlchemy. Registrado
+  também um handler específico para SQLAlchemyError, tratado no ExceptionMiddleware.
+  Resposta passa pelo CORS normal; adicionado teste de regressão dos cabeçalhos.
+  O E2E com banco indisponível passou depois da correção.
+- **Teste de cookie:** a consulta inicial usou a raiz da API, fora de Path=/api.
+  Corrigido somente o caminho de consulta do teste; política do cookie preservada.
+- **Ferramentas de desenvolvimento:** npm reportou dois avisos críticos na cadeia
+  Vitest/tinypool. Atualizados Vitest para 4.1.12 e typescript-eslint para 8.72.1,
+  após confirmar compatibilidade com Node/Vite e reexecutar a regressão.
+- **Coleta de testes:** Vitest agora inclui explicitamente src/testes/**/*.test.*,
+  separando os specs Playwright da suíte DOM. E2E tem configuração TypeScript própria.
+- Instalações, Chromium, API/Vite e execução E2E precisaram de execução autorizada
+  fora do sandbox por restrições de rede/processos. Não houve contorno de permissões.
+
+### Arquivos criados/modificados
+
+Criados:
+
+- `backend/testes/e2e/ambiente.py`: helper CLI exclusivo para banco E2E local,
+  migração, fixture, expiração e suspensão/restauração de conexões.
+- `frontend/playwright.config.ts`, `frontend/tsconfig.e2e.json`.
+- `frontend/e2e/ambiente.ts`, `preparar.ts`, `autenticacao.spec.ts` e `relator.ts`.
+- `docs/relatorios/evidencias/fase3/`: índice, capturas e JSON sanitizados.
+
+Modificados:
+
+- `backend/src/aplicacao/apresentacao/erros.py` e
+  `backend/testes/integracao/teste_autenticacao.py`: correção/regressão de CORS no 503.
+- `frontend/src/componentes/Botao.tsx` e `frontend/src/paginas/PaginaInicial.tsx`: contraste.
+- `frontend/package.json` e `package-lock.json`: Playwright, ferramentas corrigidas e scripts.
+- `frontend/vite.config.ts`, `eslint.config.js`, `.prettierignore` e `.gitignore`:
+  separação das suítes e exclusão de artefatos temporários.
+- `README.md` e este relatório: reprodução, ambiente, resultados e limites.
+
+Nenhum endpoint foi alterado, nenhum mecanismo público de ativação foi criado
+e não houve nova funcionalidade de negócio.
+
+### Pendências e conclusão
+
+Fase 3 **estável no ambiente local e nos cenários executados**, com correções
+verificadas em navegador real e regressão aprovada. Não equivale a liberação
+de produção ou certificação completa de segurança/acessibilidade.
+
+- HTTPS real do deploy, Secure/SameSite em navegador sob TLS, cookies de terceiros,
+  Firefox/WebKit e dispositivos físicos ainda precisam de homologação própria.
+  Política de cookie de produção continua coberta pelos testes backend existentes.
+- Rate limiting compartilhado antes de múltiplos processos, retenção/limpeza de
+  sessões e configuração de proxies confiáveis permanecem pendentes.
+- Auditoria completa npm ainda apresenta **sete avisos moderados** nas ferramentas
+  de desenvolvimento, na cadeia minimatch/linter. Auditoria omitindo dev retornou
+  zero. Não foi aplicado override incompatível nem audit fix --force.
+- Permanece aviso Starlette/httpx no TestClient. Nenhuma falha de teste pendente.
+- A medição de contraste cobre o botão principal e a inspeção visual dos temas;
+  não foi realizada auditoria WCAG completa.
+- Verificação de e-mail, Brevo e demais funcionalidades da Fase 4 não foram implementadas.
+
+O README contém os comandos de preparação do banco exclusivo, instalação do
+Chromium, variáveis e execução. O helper recusa hosts remotos ou banco diferente
+de linkai_e2e e limpa os dados somente desse banco. A senha da fixture é gerada
+em memória. A preparação restaura o banco caso um teste anterior tenha sido interrompido.
+API/Vite foram encerrados pelo Playwright e o cluster isolado foi desligado após
+a homologação; dados locais foram preservados. Produção não foi acessada.
+
+Commit sugerido: `test: homologar fluxo de autenticacao`.
+Nenhum commit, push ou deploy realizado. Não houve avanço para a Fase 4.

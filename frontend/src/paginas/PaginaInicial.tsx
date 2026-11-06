@@ -49,7 +49,7 @@ export function PaginaInicial() {
           <nav aria-label="Acesso à conta" className="mt-9 flex flex-wrap gap-4">
             <LinkInterno
               href="/cadastro"
-              className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 font-semibold text-white hover:bg-emerald-700"
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-emerald-700 px-5 py-3 font-semibold text-white hover:bg-emerald-800"
             >
               Criar conta <ArrowRight size={18} aria-hidden="true" />
             </LinkInterno>

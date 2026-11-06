@@ -366,14 +366,112 @@ aprovados. Backend preservado: **103 aprovados, 1 ignorado**, com PostgreSQL 18.
 real; Ruff lint e formatação aprovados. Os testes frontend usam respostas HTTP
 controladas compatíveis com os contratos, incluindo rejeições e falhas.
 
-Não foi realizada homologação ponta a ponta em navegador com cookies reais nem
-medição visual de overflow em dispositivos. Formulários usam largura fluida,
+Na entrega original da 3.4 ainda não havia homologação em navegador real;
+a Etapa 3.5 abaixo registra essa validação. Formulários usam largura fluida,
 campos sem largura mínima fixa e controles que quebram linha; acessibilidade e
 associação de erros foram verificadas em DOM de teste. As restrições de cookies
 de terceiros dos navegadores continuam relevantes em sites distintos.
 Uma sessão expirada é reconhecida na próxima consulta; não há encerramento visual
 instantâneo por evento do servidor. Validação completa de e-mail continua no backend.
 Brevo, verificação real de e-mail, métricas reais e Etapa 3.5 não foram implementados.
+
+## Etapa 3.5 — Homologação final local
+
+Fluxos reais homologados com PostgreSQL 18.6, FastAPI/Uvicorn, Vite e Chromium
+headless via Playwright 1.65.0, em ambiente Windows isolado. Banco `linkai_e2e`,
+API `http://127.0.0.1:18000`, frontend `http://127.0.0.1:15173`; CORS permite
+somente a origem desse frontend. As portas e URLs são exclusivas dos testes.
+
+**Resultado executado:** 10 E2E aprovados; 103 testes backend aprovados e 1 ignorado;
+29 testes frontend aprovados; Ruff, ESLint, TypeScript (aplicação e E2E), build e
+Prettier aprovados. Evidências: [18 capturas e resultados JSON](docs/relatorios/evidencias/fase3/README.md).
+Não há senha, token ou cookie real nos artefatos.
+
+Os E2E cobrem cadastro válido/inválido, 202 uniforme, bloqueio de não verificados,
+login verificado por fixture, rejeições genéricas, cookies HttpOnly, CSRF, CORS,
+reload, rotas privadas, logout e replay de token revogado, expiração no banco,
+falha de conexão, indisponibilidade real do banco, navegação, loading e rate limiting.
+Não são respostas de sucesso simuladas: o navegador acessa a API e o PostgreSQL.
+A interceptação de rede é usada apenas para provocar falha e atrasar envio no teste
+de loading; a resposta bem-sucedida continua vindo do backend real.
+
+Responsividade aprovada nas larguras 375, 768 e 1440 px, em claro/escuro, com
+altura de 900 px: sem overflow horizontal, controles com pelo menos 44 px de
+altura, fonte de campos de pelo menos 16 px e foco por teclado verificado.
+Não há sidebar neste produto; a navegação existente foi preservada.
+
+Correções comprovadas pela homologação:
+
+- Botão principal e CTA: fundo esmeralda mais escuro; contraste de 3,65:1 para
+  **5,36:1**, preservando o design system.
+- Falhas SQLAlchemy: tratadas antes do middleware CORS devolver a resposta,
+  permitindo que o navegador leia o `503` padronizado em vez de um erro genérico
+  de conexão. Não houve alteração de endpoint ou relaxamento de origem/CSRF.
+- Ferramentas: Vitest atualizado para 4.1.12 e typescript-eslint para 8.72.1,
+  removendo os dois avisos críticos reportados durante o diagnóstico.
+
+### Executar os E2E
+
+Requer PostgreSQL local, banco **exclusivo e descartável** chamado `linkai_e2e`,
+usuário capaz de migrar tabelas, alterar ALLOW_CONNECTIONS e encerrar suas conexões.
+O helper recusa hosts remotos e outros nomes de banco. Cada execução limpa usuários
+e sessões desse banco, aplica as migrações e cria uma fixture verificada com senha
+aleatória mantida apenas em memória. Não aponta para produção.
+Não existe endpoint público de verificação de contas.
+
+Para reutilizar o cluster já criado neste workspace, execute da raiz em PowerShell:
+
+```powershell
+$binarioPostgres = 'C:/Program Files/PostgreSQL/18/bin'
+& "$binarioPostgres/pg_ctl.exe" -D "$PWD/.postgres-teste/dados" -l "$PWD/.postgres-teste/servidor.log" -o '-h 127.0.0.1 -p 55432' -w start
+$env:PGPASSWORD = [IO.File]::ReadAllText((Join-Path $PWD '.postgres-teste/senha.secret'))
+$bancoExiste = & "$binarioPostgres/psql.exe" -h 127.0.0.1 -p 55432 -U linkai_teste -d postgres -w -tAc "SELECT 1 FROM pg_database WHERE datname='linkai_e2e'"
+if ($bancoExiste -ne '1') {
+  & "$binarioPostgres/createdb.exe" -h 127.0.0.1 -p 55432 -U linkai_teste linkai_e2e
+}
+$env:URL_BANCO_E2E = 'postgresql://linkai_teste:' + $env:PGPASSWORD + '@127.0.0.1:55432/linkai_e2e'
+Remove-Item Env:PGPASSWORD
+$env:PLAYWRIGHT_BROWSERS_PATH = Join-Path $PWD '.postgres-teste/navegadores'
+Set-Location frontend
+npm.cmd ci
+npx.cmd playwright install chromium --only-shell
+npm.cmd run test:e2e:tipos
+npm.cmd run test:e2e
+Set-Location ..
+& "$binarioPostgres/pg_ctl.exe" -D "$PWD/.postgres-teste/dados" -m fast -w stop
+Remove-Item Env:URL_BANCO_E2E, Env:PLAYWRIGHT_BROWSERS_PATH
+```
+
+Se a instância já estiver iniciada, pule o comando start. Em outro ambiente,
+configure URL_BANCO_E2E diretamente no processo com credenciais locais, sem gravá-las
+em relatórios. `E2E_PYTHON` permite indicar outro Python do venv (por exemplo no
+Linux); o padrão aponta para o venv Windows deste repositório.
+Playwright inicia e encerra API/Vite e não reutiliza servidores existentes.
+Variáveis normais do backend são sobrescritas somente nos processos de teste;
+os limites padrão de cadastro e login permanecem ativos.
+
+O cenário de banco indisponível suspende conexões apenas de `linkai_e2e`, encerra
+as conexões desse banco e o restaura em finally. Se a execução for interrompida
+externamente, a preparação da próxima execução o restaura antes das fixtures.
+Logs brutos ficam somente na pasta ignorada `.postgres-teste/`; o teste procura
+credenciais/tokens nesses logs. Traces, vídeo e storageState não são gravados.
+O relatório E2E sanitiza mensagens de erro e grava somente resultados e durações.
+
+### Pendências para produção
+
+A Fase 3 está estável no ambiente local e nos cenários executados. Isso não
+substitui homologação HTTPS do deploy real: Firefox/WebKit, Secure/SameSite em
+browser sob HTTPS e políticas de cookies de terceiros não foram testados nesta rodada.
+Continuam pendentes rate limiting compartilhado, retenção/limpeza de sessões e
+configuração de proxies confiáveis antes de escalar. Não foi realizada auditoria
+WCAG completa nem teste em dispositivos físicos.
+
+Auditoria npm observada: **zero avisos em `npm audit --omit=dev`**. Restam sete
+avisos moderados na cadeia de ferramentas de desenvolvimento (minimatch/linter).
+Não foi aplicado override incompatível nem `audit fix --force`; acompanhar uma
+correção compatível e revalidar antes de ampliar exposição das ferramentas.
+Permanece o aviso conhecido Starlette/httpx no TestClient, sem falha da suíte.
+Verificação de e-mail e Brevo continuam exclusivamente reservados à Fase 4.
 
 ## Arquitetura e próximas etapas
 
@@ -383,11 +481,11 @@ infraestrutura assíncrona e apresentação HTTP. O repositório executa flush;
 em dependência com escopo de função para concluir o commit antes de enviar a resposta.
 Não foram necessárias novas migrações na Etapa 3.2.
 
-Etapa 3.4 concluída no escopo acima. Etapa 3.5 não iniciada.
+Etapas 3.1–3.5 concluídas no escopo de autenticação e homologação local acima.
 Fase 4: verificação real de e-mail e integração Brevo por abstração.
 Variáveis futuras previstas, ainda não utilizadas: `BREVO_API_KEY`, `EMAIL_REMETENTE`,
 `NOME_REMETENTE` e `URL_PUBLICA_FRONTEND`. Links e analytics também ficam fora do escopo.
 
 Resultados e arquivos: [relatório da Fase 3](docs/relatorios/fase3-autenticacao.md).
-Commit sugerido para a Etapa 3.4: `feat: integrar autenticacao ao frontend`.
+Commit sugerido para a Etapa 3.5: `test: homologar fluxo de autenticacao`.
 Nenhum commit, push ou deploy foi executado automaticamente.

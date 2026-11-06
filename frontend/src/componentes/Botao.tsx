@@ -13,7 +13,7 @@ export function Botao({
 }: Propriedades) {
   const estilo =
     variante === 'principal'
-      ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+      ? 'bg-emerald-700 text-white hover:bg-emerald-800'
       : 'border border-current/20 hover:bg-current/5';
 
   return (

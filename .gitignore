@@ -33,6 +33,8 @@ frontend/dist/
 frontend/.vite/
 .vite/
 *.tsbuildinfo
+frontend/test-results/
+frontend/playwright-report/
 
 # Logs e arquivos temporários de gerenciadores de pacotes
 npm-debug.log*
