@@ -4,6 +4,7 @@ import { servicoAutenticacao } from './servico';
 import { usarAutenticacao } from './usarAutenticacao';
 import { validarFormulario } from './validacao';
 import { navegar } from '../../navegacao/usarNavegacao';
+import { contextoVerificacao, intervaloReenvio } from './verificacao';
 
 function useFormularioAutenticacao(cadastro: boolean) {
   const { entrar } = usarAutenticacao();
@@ -42,8 +43,11 @@ function useFormularioAutenticacao(cadastro: boolean) {
     definirEnviando(true);
     try {
       if (cadastro) {
-        definirSucesso(await servicoAutenticacao.cadastrar(dados));
+        await servicoAutenticacao.cadastrar(dados);
         formulario.reset();
+        contextoVerificacao.email = dados.email;
+        contextoVerificacao.reenviarEm = Date.now() + intervaloReenvio * 1000;
+        navegar('/verificar-email');
       } else {
         await entrar({ email: dados.email, senha: dados.senha });
         formulario.reset();

@@ -1,10 +1,11 @@
-export type ErrosCampos = Partial<Record<'nome' | 'email' | 'senha', string>>;
+export type ErrosCampos = Partial<Record<'nome' | 'email' | 'senha' | 'codigo', string>>;
 
 export class ErroHTTP extends Error {
   constructor(
     public readonly status: number,
     mensagem: string,
     public readonly campos: ErrosCampos = {},
+    public readonly aguardarSegundos?: number,
   ) {
     super(mensagem);
   }
@@ -37,7 +38,7 @@ export async function requisitar(
       if (Array.isArray(dados?.erro?.campos)) {
         for (const detalhe of dados.erro.campos) {
           if (
-            ['nome', 'email', 'senha'].includes(detalhe?.campo) &&
+            ['nome', 'email', 'senha', 'codigo'].includes(detalhe?.campo) &&
             typeof detalhe.mensagem === 'string'
           ) {
             campos[detalhe.campo as keyof ErrosCampos] = detalhe.mensagem;
@@ -56,6 +57,7 @@ export async function requisitar(
         resposta.status,
         mensagens[resposta.status] || 'Não foi possível concluir a solicitação.',
         campos,
+        obterEspera(resposta.headers.get('Retry-After')),
       );
     }
     if (resposta.status !== statusEsperado)
@@ -70,4 +72,10 @@ export async function requisitar(
   } finally {
     window.clearTimeout(prazo);
   }
+}
+
+function obterEspera(valor: string | null): number | undefined {
+  if (!valor) return undefined;
+  const segundos = /^\d+$/.test(valor) ? Number(valor) : (Date.parse(valor) - Date.now()) / 1000;
+  return Number.isFinite(segundos) ? Math.max(0, Math.ceil(segundos)) : undefined;
 }

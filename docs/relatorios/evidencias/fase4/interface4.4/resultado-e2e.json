@@ -1,0 +1,76 @@
+{
+  "resultado": "passed",
+  "duracaoMs": 16008.899000000001,
+  "testes": [
+    {
+      "teste": "cadastro 202 uniforme, validação e conta não verificada",
+      "resultado": "passed",
+      "duracaoMs": 890
+    },
+    {
+      "teste": "credenciais incorretas e conta inexistente permanecem genéricas",
+      "resultado": "passed",
+      "duracaoMs": 498
+    },
+    {
+      "teste": "cookie HttpOnly, CSRF, CORS, reload, logout e revogação reais",
+      "resultado": "passed",
+      "duracaoMs": 479
+    },
+    {
+      "teste": "rota privada sem autenticação e histórico de navegação",
+      "resultado": "passed",
+      "duracaoMs": 289
+    },
+    {
+      "teste": "sessão expirada no PostgreSQL remove acesso",
+      "resultado": "passed",
+      "duracaoMs": 1218
+    },
+    {
+      "teste": "falha de conexão e indisponibilidade real do banco falham com segurança",
+      "resultado": "passed",
+      "duracaoMs": 2155
+    },
+    {
+      "teste": "375, 768 e 1440 px, temas, foco, teclado e evidências visuais",
+      "resultado": "passed",
+      "duracaoMs": 3263
+    },
+    {
+      "teste": "loading real e bloqueio de múltiplos envios",
+      "resultado": "passed",
+      "duracaoMs": 357
+    },
+    {
+      "teste": "limite de tentativas permanece ativo",
+      "resultado": "passed",
+      "duracaoMs": 207
+    },
+    {
+      "teste": "logs da API não registram credenciais ou tokens",
+      "resultado": "passed",
+      "duracaoMs": 2
+    },
+    {
+      "teste": "verificação: colagem completa, confirmação e navegação sem sessão automática",
+      "resultado": "passed",
+      "duracaoMs": 303
+    },
+    {
+      "teste": "verificação: reload permite informar e-mail sem dados na URL",
+      "resultado": "passed",
+      "duracaoMs": 331
+    },
+    {
+      "teste": "verificação: erros neutros, rede, loading, reenvio e cooldown",
+      "resultado": "passed",
+      "duracaoMs": 444
+    },
+    {
+      "teste": "verificação: 375, 768 e 1440 px, temas, contraste e foco",
+      "resultado": "passed",
+      "duracaoMs": 1161
+    }
+  ]
+}

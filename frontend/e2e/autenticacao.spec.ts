@@ -5,7 +5,9 @@ import { operarBanco } from './ambiente';
 
 const api = 'http://127.0.0.1:18000';
 const origem = 'http://127.0.0.1:15173';
-const pastaEvidencias = resolve('../docs/relatorios/evidencias/fase3');
+const pastaEvidencias = resolve(
+  process.env.E2E_PASTA_EVIDENCIAS || '../docs/relatorios/evidencias/fase3',
+);
 
 async function preencher(page: Page, email: string, cadastro = false) {
   if (cadastro) await page.getByLabel('Nome', { exact: true }).fill('Pessoa de teste');
@@ -40,6 +42,7 @@ test('cadastro 202 uniforme, validação e conta não verificada', async ({ page
   }
   const mensagens: string[] = [];
   for (let tentativa = 0; tentativa < 2; tentativa++) {
+    if (tentativa) await page.goto('/cadastro');
     await preencher(page, 'cadastro@example.com', true);
     const resposta = page.waitForResponse(
       (resposta) => resposta.url().endsWith('/cadastro') && resposta.request().method() === 'POST',
@@ -50,15 +53,23 @@ test('cadastro 202 uniforme, validação e conta não verificada', async ({ page
     const dados = await cadastro.json();
     mensagens.push(dados.mensagem);
     expect(Object.keys(dados)).toEqual(['mensagem']);
-    await expect(page.getByRole('status')).toHaveText(dados.mensagem);
-    await expect(page.getByLabel('Senha', { exact: true })).toHaveValue('');
+    await expect(page).toHaveURL(/\/verificar-email$/);
+    await expect(page.getByRole('heading', { name: 'Verifique seu e-mail' })).toBeVisible();
+    await expect(
+      page.getByText(
+        'Se o endereço for elegível, receberá instruções de verificação. Confira também a pasta de spam.',
+      ),
+    ).toBeVisible();
+    await expect(page.getByLabel('Senha', { exact: true })).toHaveCount(0);
+    await expect(page.getByLabel('E-mail', { exact: true })).toHaveValue('cadastro@example.com');
+    await expect(page.getByRole('button', { name: 'Reenviar código' })).toBeDisabled();
     expect(
       (await context.cookies(`${api}/api`)).some((cookie) => cookie.name.includes('sessao')),
     ).toBe(false);
   }
   expect(mensagens[0] === mensagens[1]).toBe(true);
   expect(mensagens[0].includes('verificação de e-mail')).toBe(true);
-  await page.getByRole('link', { name: 'Entrar', exact: true }).click();
+  await page.getByRole('link', { name: 'Ir para o login', exact: true }).click();
   await preencher(page, 'cadastro@example.com');
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
   await expect(page.getByRole('alert')).toHaveText('E-mail ou senha inválidos.');

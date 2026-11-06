@@ -66,7 +66,10 @@ describe('Cadastro integrado', () => {
     await abrir('/cadastro');
     preencher(true);
     fireEvent.submit(screen.getByRole('form', { name: 'Cadastro' }));
-    expect(await screen.findByRole('status')).toHaveTextContent(mensagemCadastro);
+    expect(
+      await screen.findByRole('heading', { name: 'Verifique seu e-mail' }),
+    ).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/verificar-email');
     const opcoes = chamadas('/cadastro')[0][1];
     expect(opcoes?.credentials).toBe('include');
     expect(JSON.parse(String(opcoes?.body))).toEqual({
@@ -76,7 +79,7 @@ describe('Cadastro integrado', () => {
     });
     expect(chamadas('/login')).toHaveLength(0);
     expect(screen.queryByText('Sua conta está conectada ao Linkai.')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Senha')).toHaveValue('');
+    expect(screen.queryByLabelText('Senha')).not.toBeInTheDocument();
   });
 
   it('valida campos com rótulos, associação de erros e foco', async () => {
@@ -108,7 +111,10 @@ describe('Cadastro integrado', () => {
     expect(formulario).toHaveAttribute('aria-busy', 'true');
     expect(chamadas('/cadastro')).toHaveLength(1);
     await act(async () => concluir(resposta(202, { mensagem: mensagemCadastro })));
-    expect(await screen.findByRole('status')).toHaveTextContent(mensagemCadastro);
+    expect(
+      await screen.findByRole('heading', { name: 'Verifique seu e-mail' }),
+    ).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/verificar-email');
   });
 
   it('trata falha de rede sem simular sucesso', async () => {

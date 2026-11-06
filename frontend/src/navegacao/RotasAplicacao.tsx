@@ -9,6 +9,7 @@ import { PaginaInicial } from '../paginas/PaginaInicial';
 import { PaginaCadastro } from '../paginas/PaginaCadastro';
 import { PaginaLogin } from '../paginas/PaginaLogin';
 import { PaginaDashboard } from '../paginas/PaginaDashboard';
+import { PaginaVerificacaoEmail } from '../paginas/PaginaVerificacaoEmail';
 import { navegar, usarNavegacao } from './usarNavegacao';
 
 function Redirecionar({ caminho }: { caminho: string }) {
@@ -26,7 +27,7 @@ export function RotasAplicacao() {
   const caminho = usarNavegacao();
   const { situacao, mensagem, revalidar } = usarAutenticacao();
   useEffect(() => {
-    document.title = `${({ '/login': 'Entrar', '/cadastro': 'Criar conta', '/dashboard': 'Minha conta' } as Record<string, string>)[caminho] || 'Início'} | Linkai`;
+    document.title = `${({ '/login': 'Entrar', '/cadastro': 'Criar conta', '/dashboard': 'Minha conta', '/verificar-email': 'Verificar e-mail' } as Record<string, string>)[caminho] || 'Início'} | Linkai`;
     const titulo = document.querySelector<HTMLElement>('main h1');
     if (titulo) {
       titulo.tabIndex = -1;
@@ -59,6 +60,7 @@ export function RotasAplicacao() {
       );
     return situacao === 'autenticado' ? <PaginaDashboard /> : <Redirecionar caminho="/login" />;
   }
+  if (caminho === '/verificar-email') return <PaginaVerificacaoEmail />;
   if (caminho === '/login' || caminho === '/cadastro') {
     if (situacao === 'autenticado') return <Redirecionar caminho="/dashboard" />;
     return caminho === '/login' ? <PaginaLogin /> : <PaginaCadastro />;

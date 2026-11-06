@@ -23,7 +23,9 @@ export default class RelatorSeguro implements Reporter {
     }
   }
   onEnd(resultado: FullResult) {
-    const pasta = resolve('../docs/relatorios/evidencias/fase3');
+    const pasta = resolve(
+      process.env.E2E_PASTA_EVIDENCIAS || '../docs/relatorios/evidencias/fase3',
+    );
     mkdirSync(pasta, { recursive: true });
     writeFileSync(
       resolve(pasta, 'resultado-e2e.json'),

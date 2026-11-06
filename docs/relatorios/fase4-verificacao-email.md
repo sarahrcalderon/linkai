@@ -453,3 +453,151 @@ das fases anteriores continuam válidas. Etapa 4.4 não iniciada.
 
 Commit sugerido: `feat: implementar confirmacao de email`.
 Nenhum commit, push, deploy ou alteração em produção foi realizado.
+
+## Etapa 4.4 — Experiência frontend de verificação de e-mail
+
+Homologação local em 06/11/2026. Esta seção complementa os registros históricos
+anteriores: a interface de confirmação/reenvio agora está implementada. Escopo
+restrito a frontend, testes e documentação; backend, endpoints, outbox, worker,
+migrações, autenticação, CORS e CSRF foram preservados.
+
+### Fluxo e contratos utilizados
+
+- Cadastro aceita somente HTTP 202, limpa senha e navega para `/verificar-email`.
+  E-mail normalizado e prazo inicial ficam somente em memória, sem URL/history state.
+  A mensagem condiciona instruções à elegibilidade; não afirma conta criada ou envio.
+- Rota pública independente da sessão, disponível por acesso direto ou reload.
+  Sem contexto em memória, solicita e-mail novamente; o código inicia vazio.
+- Confirmação: POST `/api/autenticacao/verificar-email`, JSON email/codigo.
+  Somente 200 permite sucesso; 400 produz uma única mensagem neutra para código
+  incorreto/expirado/usado/indisponível e limpa o campo. 422 associa erros conhecidos;
+  429 e indisponibilidade/rede usam o tratamento central HTTP existente.
+- Sucesso limpa código/e-mail em memória, orienta login e fornece link. Nenhum
+  login automático ou manipulação de cookies foi acrescentado.
+- Reenvio: POST `/api/autenticacao/reenviar-codigo`, JSON email, exige 202.
+  Mensagem neutra sem promessa de entrega imediata; código anterior é limpo no sucesso.
+  Erros de rede liberam nova tentativa. Mutex síncrono no hook impede requisições
+  simultâneas entre confirmar e reenviar, além dos botões/campos desabilitados.
+
+### Decisões de arquitetura e UX
+
+Serviço de verificação separado valida contratos de resposta e mapeia o 400
+específico; hook cuida do estado/validação, cooldown e envio; página apenas compõe
+os componentes existentes. Não foram adicionadas bibliotecas. Campo único de texto
+com inputMode numeric, autocomplete one-time-code, seis dígitos ASCII e colagem
+completa evita a complexidade de seis campos. CampoTexto, Botao, Feedback,
+EstruturaAcesso e LinkInterno preservam os temas e Design System existentes.
+
+Erros próximos aos campos usam aria-invalid/aria-describedby, com foco no primeiro
+campo inválido. Feedback recebe foco; formulário indica aria-busy. O timer pode
+ser consultado, mas não anuncia cada segundo; uma região de status anuncia a
+liberação. A navegação mantém título e foco no h1 e as rotas privadas existentes.
+
+VITE_VERIFICACAO_INTERVALO_REENVIO padrão 60 deve acompanhar
+VERIFICACAO_INTERVALO_REENVIO. O contrato 202 não oferece prazo; usa-se o valor
+documentado. O cliente HTTP interpreta Retry-After numérico ou data se acessível.
+CORS existente não expõe esse cabeçalho para origens distintas; nesse caso usa-se
+o intervalo configurado, sem alterar o backend nesta etapa. Recarregar perde o
+contador local, enquanto cooldown, janela e rate limiting PostgreSQL permanecem
+autoritativos. Não há tentativa de tornar o contador frontend proteção definitiva.
+
+### Arquivos criados e modificados
+
+Criados:
+
+- frontend/src/paginas/PaginaVerificacaoEmail.tsx.
+- frontend/src/funcionalidades/autenticacao/verificacao.ts e usarVerificacaoEmail.ts.
+- frontend/src/testes/VerificacaoEmail.test.tsx.
+- frontend/e2e/verificacao-email.spec.ts.
+- Evidências sanitizadas em evidencias/fase4/interface4.4, sem códigos/credenciais.
+
+Modificados:
+
+- frontend/src/funcionalidades/autenticacao/usarFormularioAutenticacao.ts: contexto
+  transitório e navegação após 202.
+- frontend/src/navegacao/RotasAplicacao.tsx: rota pública e título.
+- frontend/src/servicos/http.ts: campo codigo e Retry-After opcional no erro.
+- frontend/.env.exemplo: intervalo de reenvio documentado.
+- frontend/src/testes/Autenticacao.test.tsx e frontend/e2e/autenticacao.spec.ts:
+  expectativas atualizadas para o novo redirecionamento, preservando regressões.
+- frontend/e2e/relator.ts: destino de evidências configurável por
+  E2E_PASTA_EVIDENCIAS, evitando sobrescrever homologações anteriores.
+- README.md e este relatório.
+
+### Testes efetivamente executados
+
+| Verificação | Resultado |
+| --- | --- |
+| npm run test | 46 aprovados, incluindo 17 novos casos de verificação |
+| npm run lint | Aprovado |
+| npm run build | TypeScript e Vite aprovados |
+| npm run format:check | Aprovado |
+| npm run test:e2e:tipos | Aprovado |
+| npm run test:e2e | 14 aprovados no Chromium real, 10 existentes e 4 novos |
+| pytest -q | 196 aprovados, 1 ignorado, PostgreSQL 18.6 real |
+| ruff check . | Aprovado |
+| ruff format --check . | 86 arquivos formatados |
+
+O ignorado permanece a variante de concorrência SQLite anterior; os testes de
+concorrência/transações PostgreSQL foram executados. Aviso conhecido de depreciação
+Starlette/httpx permanece. API/Vite usaram bancos locais exclusivos linkai_e2e e
+linkai_homologacao; nenhum banco de produção. Chaves de teste geradas em memória.
+Worker não iniciado, sem chamadas ou envio de e-mails reais. Os novos E2E usam
+respostas simuladas dos endpoints; não comprovam entrega nem substituem os testes
+backend reais de confirmação/concorrência da regressão.
+
+Testes cobrem redirecionamento 202, campos vazios/formatos inválidos, e-mail
+normalizado, confirmação, códigos incorretos/expirados/usados com mesmo retorno,
+loading e bloqueio de duplicatas, reenvio/cooldown, Retry-After, falhas de rede,
+limpeza de dados, ausência de armazenamento, login, reload, teclado e temas.
+Chromium validou colagem completa pela área de transferência, navegação por Tab e
+Enter, recuperação após reload, erro/rede/loading e reenvio. Testes anteriores
+continuam verificando cookies HttpOnly, CSRF, CORS, logout/revogação e falha do banco.
+
+Primeira execução E2E identificou erro de codificação em uma mensagem esperada
+no teste adaptado; corrigido e a suíte completa repetida com 14 aprovações.
+O comando npm.ps1 foi bloqueado pela política do PowerShell; usou-se npm.cmd.
+Esbuild exigiu execução aprovada fora do sandbox. PostgreSQL foi iniciado em
+127.0.0.1:55432, pois a porta padrão estava indisponível; não foi reconfigurada.
+API/Vite foram encerrados pelo Playwright e o cluster isolado foi encerrado após
+as validações. As capturas mobile claro e desktop escuro também foram inspecionadas visualmente.
+
+### Evidências de responsividade e acessibilidade
+
+Chromium 158.0.8127.18, larguras 375, 768 e 1440, altura 900, temas claro/escuro.
+As seis combinações apresentaram ausência de overflow, campos com fonte ≥16 px,
+alvos de campos/botões ≥44 px e foco visível no código por teclado.
+Contrastes medidos: botão 5,36:1; texto principal 17,04:1 claro/18,40:1 escuro;
+link 5,13:1 claro/10,40:1 escuro. Todos esses elementos superam WCAG AA de 4,5:1.
+Não se declara auditoria WCAG completa ou teste com leitor de tela real.
+
+- [Resultado E2E](evidencias/fase4/interface4.4/resultado-e2e.json).
+- [Medições de verificação](evidencias/fase4/interface4.4/verificacao-layout.json).
+- [Celular claro](evidencias/fase4/interface4.4/verificacao-375-claro.png).
+- [Celular escuro](evidencias/fase4/interface4.4/verificacao-375-escuro.png).
+- [Tablet claro](evidencias/fase4/interface4.4/verificacao-768-claro.png).
+- [Desktop escuro](evidencias/fase4/interface4.4/verificacao-1440-escuro.png).
+
+### Execução local, limites e Etapa 4.5
+
+Inicie PostgreSQL/API conforme a seção 4.3 do README, com chaves estáveis e
+alembic upgrade head. Em frontend, copie .env.exemplo para .env, alinhe URL e
+intervalo ao backend, execute npm install e npm run dev. Abra /cadastro ou
+/verificar-email; após reload informe o e-mail novamente. Login só ocorre pela
+tela própria depois da confirmação explícita.
+
+Para regressão: execute os comandos da tabela, com URL_BANCO_TESTE e URL_BANCO_E2E
+apontando para bancos locais exclusivos. PLAYWRIGHT_BROWSERS_PATH pode apontar
+para a instalação local de Chromium. Configure E2E_PASTA_EVIDENCIAS para preservar
+os registros anteriores. Não iniciar worker nos testes automatizados.
+
+Testar entrega real exige conta/configuração Brevo autorizada e execução explícita
+do worker, que envia e-mails reais. Isso não foi realizado. Permanecem pendentes
+para planejamento da 4.5: entrega ponta a ponta autorizada, HTTPS, navegadores e
+dispositivos adicionais, leitores de tela reais e acompanhamento operacional.
+Limites/rotação/reconciliação descritos na 4.3 continuam válidos. A API permanece
+autoridade de segurança quando o estado em memória é perdido.
+
+Nenhuma migração, endpoint ou funcionalidade da Etapa 4.5 foi implementada.
+Nenhum commit, push ou deploy foi realizado.
+Commit sugerido: `feat: criar fluxo de verificacao de email`.

@@ -191,7 +191,8 @@ O login normaliza o e-mail e verifica Argon2id. E-mail inexistente, senha errada
 conta inativa ou não verificada recebem o mesmo `401`, com código
 `credenciais_invalidas` e mensagem `E-mail ou senha inválidos.`. Um hash fictício
 é verificado quando a conta não existe para reduzir diferenças de processamento.
-O cadastro continua sem liberar acesso; não há endpoint para verificar e-mails.
+O cadastro continua sem liberar acesso. Desde a Etapa 4.3, a confirmação explícita
+usa o endpoint descrito adiante; não há atalhos públicos para verificar contas.
 
 Login e logout exigem `Origin` exatamente igual a uma entrada de
 `ORIGENS_PERMITIDAS`; ausência ou origem diferente recebe `403`. Isso também
@@ -327,8 +328,8 @@ SameSite conforme a relação entre sites e ausência de Domain compartilhado.
 ### Fluxos e segurança
 
 - Cadastro valida nome, e-mail e senha, mostra erros junto aos campos e bloqueia
-  envios simultâneos. Aceita somente o status 202 contratado e mostra a mensagem
-  uniforme de que a verificação de e-mail será necessária. Não informa existência
+  envios simultâneos. Aceita somente o status 202 contratado e, desde a Etapa 4.4,
+  direciona para `/verificar-email` com mensagem neutra. Não informa existência
   da conta, não afirma envio de e-mail e não autentica automaticamente.
 - Login atualiza o estado apenas depois de 200 com usuário verificado e CSRF válido.
   Respostas 401 permanecem genéricas, incluindo conta não verificada; 429 e falhas
@@ -420,7 +421,8 @@ usuário capaz de migrar tabelas, alterar ALLOW_CONNECTIONS e encerrar suas cone
 O helper recusa hosts remotos e outros nomes de banco. Cada execução limpa usuários
 e sessões desse banco, aplica as migrações e cria uma fixture verificada com senha
 aleatória mantida apenas em memória. Não aponta para produção.
-Não existe endpoint público de verificação de contas.
+Não existe atalho público de verificação de contas; desde a Etapa 4.3, confirmar
+exige o código temporário e os controles descritos na seção correspondente.
 
 Para reutilizar o cluster já criado neste workspace, execute da raiz em PowerShell:
 
@@ -776,10 +778,61 @@ Para executar testes: `pytest`, `ruff check .` e `ruff format --check .` no back
 `npm run lint`, `npm run test` e `npm run build` no frontend. PostgreSQL de testes
 usa URL_BANCO_TESTE; comandos E2E continuam na seção 3.5.
 
-Pendências 4.4: experiência React de confirmação/reenvio, homologação autorizada de
-entrega real e operação de monitoramento/reconciliação. Retenção e rotação de chaves
+O fluxo React foi implementado na Etapa 4.4, descrita abaixo. Homologação autorizada de
+entrega real e operação de monitoramento/reconciliação permanecem pendentes. Retenção e rotação de chaves
 continuam exigindo planejamento; não há telas administrativas, webhook ou reconciliação
 automática de mensagens indeterminadas. Relatório: [Fase 4](docs/relatorios/fase4-verificacao-email.md).
+
+## Etapa 4.4 — Interface de verificação de e-mail
+
+Após cadastro HTTP 202, o frontend abre a rota pública `/verificar-email`, sem
+presumir criação de conta ou entrega. E-mail e prazo inicial são transportados
+somente em memória; senha é limpa. O código nunca é colocado na URL, histórico,
+localStorage ou sessionStorage. Após reload, informe novamente o e-mail.
+
+A tela reutiliza o Design System, temas e layout de login/cadastro. Campo único
+de seis dígitos ASCII aceita colagem e `autocomplete="one-time-code"`; teclado
+numérico é sugerido no celular. Há erros associados aos campos, foco no erro ou
+feedback, carregamento e bloqueio de operações simultâneas. Confirmação usa
+`POST /api/autenticacao/verificar-email`: 200 mostra sucesso e link para login;
+400 trata igualmente código incorreto, expirado, utilizado ou conta indisponível.
+Não cria sessão nem manipula cookies.
+
+Reenvio usa `POST /api/autenticacao/reenviar-codigo`, aceita somente 202 e informa
+que endereços elegíveis receberão instruções, sem prometer entrega imediata.
+A contagem regressiva é consultável pelo leitor de tela, sem anunciar cada segundo;
+a disponibilidade é anunciada uma vez. O backend continua aplicando os limites reais.
+
+Configure `VITE_VERIFICACAO_INTERVALO_REENVIO=60` em `frontend/.env`, alinhado a
+`VERIFICACAO_INTERVALO_REENVIO` do backend. O endpoint 202 não expõe cooldown;
+o cliente usa o valor documentado. Se `Retry-After` estiver acessível em uma resposta
+429, respeita esse prazo; caso contrário, usa o intervalo configurado. O CORS atual
+não expõe esse cabeçalho em origens distintas. Reload perde o contador local;
+isso não remove o limite PostgreSQL. Não houve mudança de endpoints, CORS ou worker.
+
+Para testar localmente:
+
+1. Configure e inicie PostgreSQL/API com as chaves estáveis e migrações da seção 4.3.
+2. Em `frontend`, copie `.env.exemplo` para `.env`, ajuste a URL e o intervalo;
+   execute `npm install` e `npm run dev`.
+3. Abra `/cadastro` e envie dados válidos. Confira a navegação para `/verificar-email`;
+   reload permite preencher o endereço novamente. Login segue bloqueado antes da confirmação.
+4. Para confirmar com código recebido, o worker exige configuração Brevo válida
+   e seu início causa envio real. A regressão automatizada não inicia o worker;
+   os novos testes frontend/E2E usam mocks. Não consulte nem exponha códigos da outbox.
+
+Validação desta etapa: **46 testes frontend**, **14 E2E Chromium** (10 existentes
+adaptados ao redirecionamento e 4 novos), **196 backend aprovados e 1 ignorado**,
+PostgreSQL 18.6 real. ESLint, build/TypeScript, tipos E2E, Prettier e Ruff aprovados.
+Responsividade em 375/768/1440 px e temas claro/escuro: sem overflow, campos ≥16 px,
+alvos ≥44 px, foco visível; contraste de botão, texto principal e link ≥4,5:1.
+Essas medições não equivalem a auditoria completa de acessibilidade.
+[Evidências](docs/relatorios/evidencias/fase4/interface4.4/verificacao-layout.json) e
+[relatório da etapa](docs/relatorios/fase4-verificacao-email.md).
+
+Pendências para a Etapa 4.5: homologação autorizada da entrega real, leitores de tela,
+HTTPS, outros navegadores/dispositivos e operação/monitoramento conforme planejamento.
+A etapa 4.5 não foi iniciada. Nenhuma nova dependência ou migração foi necessária.
 
 ## Arquitetura e próximas etapas
 
@@ -795,5 +848,5 @@ O adaptador usa as variáveis BREVO_* descritas acima. `URL_PUBLICA_FRONTEND` pe
 reservada a necessidades futuras. Links e analytics continuam fora do escopo.
 
 Resultados e arquivos: [relatório da Fase 3](docs/relatorios/fase3-autenticacao.md).
-Commit sugerido para a Etapa 4.3: `feat: implementar confirmacao de email`.
+Commit sugerido para a Etapa 4.4: `feat: criar fluxo de verificacao de email`.
 Nenhum commit, push ou deploy foi executado automaticamente.
