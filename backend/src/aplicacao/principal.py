@@ -5,9 +5,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from aplicacao.apresentacao.erros import registrar_tratamento_erros
 from aplicacao.apresentacao.protecao_cadastro import ProtecaoCadastro
+from aplicacao.apresentacao.protecao_links import ProtecaoCorpoLinks
 from aplicacao.apresentacao.protecao_persistente import ProtecaoPersistente
 from aplicacao.apresentacao.rotas.autenticacao import roteador_autenticacao
 from aplicacao.apresentacao.rotas.cadastro import roteador_cadastro
+from aplicacao.apresentacao.rotas.links import roteador_links
 from aplicacao.apresentacao.rotas.saude import roteador_saude
 from aplicacao.apresentacao.rotas.verificacao_email import roteador_verificacao
 from aplicacao.configuracao import Configuracao
@@ -35,6 +37,7 @@ def criar_aplicacao(configuracao: Configuracao | None = None) -> FastAPI:
     app = FastAPI(title="API de Linkai", version="0.1.0", lifespan=ciclo_vida)
     app.state.configuracao = configuracao
     registrar_tratamento_erros(app)
+    app.add_middleware(ProtecaoCorpoLinks)
     app.add_middleware(ProtecaoPersistente)
     for caminho in ("/api/autenticacao/verificar-email", "/api/autenticacao/reenviar-codigo"):
         app.add_middleware(
@@ -58,10 +61,11 @@ def criar_aplicacao(configuracao: Configuracao | None = None) -> FastAPI:
         CORSMiddleware,
         allow_origins=configuracao.origens_permitidas,
         allow_credentials=True,
-        allow_methods=["GET", "POST"],
+        allow_methods=["GET", "POST", "PATCH", "DELETE"],
         allow_headers=["Content-Type", "X-CSRF-Token"],
     )
     app.include_router(roteador_saude, prefix="/api")
+    app.include_router(roteador_links, prefix="/api")
     app.include_router(roteador_cadastro, prefix="/api")
     app.include_router(roteador_autenticacao, prefix="/api")
     app.include_router(roteador_verificacao, prefix="/api")

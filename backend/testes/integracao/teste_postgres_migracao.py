@@ -38,7 +38,7 @@ async def test_upgrade_downgrade_upgrade_postgres():
             await conexao.execute(text(f'SET LOCAL search_path TO "{esquema}"'))
             await conexao.run_sync(migrar, command.upgrade, "head")
             await conexao.run_sync(verificar_modelos)
-            assert await conexao.scalar(text("SELECT version_num FROM alembic_version")) == "0004"
+            assert await conexao.scalar(text("SELECT version_num FROM alembic_version")) == "0005"
         # A reversão exclusiva da 3.3 deve preservar usuários da 3.2.
         async with motor.begin() as conexao:
             await conexao.execute(text(f'SET LOCAL search_path TO "{esquema}"'))

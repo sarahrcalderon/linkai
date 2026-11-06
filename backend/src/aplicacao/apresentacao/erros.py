@@ -8,6 +8,8 @@ from aplicacao.casos_de_uso.contratos_autenticacao import (
     CsrfInvalido,
     SessaoInvalida,
 )
+from aplicacao.casos_de_uso.gerenciar_links import DadosLinkInvalidos
+from aplicacao.dominio.repositorio_links import LinkNaoEncontrado, SlugJaUtilizado
 
 
 def resposta_erro(codigo: str, mensagem: str, status: int, **detalhes) -> JSONResponse:
@@ -19,6 +21,18 @@ def resposta_erro(codigo: str, mensagem: str, status: int, **detalhes) -> JSONRe
 
 
 def registrar_tratamento_erros(app: FastAPI) -> None:
+    @app.exception_handler(LinkNaoEncontrado)
+    async def tratar_link_ausente(requisicao: Request, erro: LinkNaoEncontrado):
+        return resposta_erro("link_nao_encontrado", "Link não encontrado.", 404)
+
+    @app.exception_handler(SlugJaUtilizado)
+    async def tratar_slug(requisicao: Request, erro: SlugJaUtilizado):
+        return resposta_erro("slug_indisponivel", "Slug indisponível.", 409)
+
+    @app.exception_handler(DadosLinkInvalidos)
+    async def tratar_dados_link(requisicao: Request, erro: DadosLinkInvalidos):
+        return resposta_erro("dados_invalidos", "Revise os dados do link.", 422)
+
     @app.exception_handler(CredenciaisInvalidas)
     async def tratar_credenciais(requisicao: Request, erro: CredenciaisInvalidas):
         return resposta_erro("credenciais_invalidas", "E-mail ou senha inválidos.", 401)
@@ -41,6 +55,23 @@ def registrar_tratamento_erros(app: FastAPI) -> None:
             "senha": "Informe uma senha com 12 a 128 caracteres, sem caracteres de controle.",
         }
         mensagem_corpo = "Envie apenas nome, e-mail e senha em um objeto JSON válido."
+        if requisicao.url.path.rstrip("/") == "/api/links" or requisicao.url.path.startswith(
+            "/api/links/"
+        ):
+            mensagens = {
+                c: "Revise o campo informado."
+                for c in (
+                    "nome",
+                    "slug",
+                    "numero_whatsapp",
+                    "mensagem",
+                    "ativo",
+                    "identificador",
+                    "pagina",
+                    "tamanho",
+                )
+            }
+            mensagem_corpo = "Envie apenas os campos previstos para links."
         if requisicao.url.path.rstrip("/") in {
             "/api/autenticacao/verificar-email",
             "/api/autenticacao/reenviar-codigo",

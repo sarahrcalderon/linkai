@@ -601,3 +601,359 @@ autoridade de segurança quando o estado em memória é perdido.
 Nenhuma migração, endpoint ou funcionalidade da Etapa 4.5 foi implementada.
 Nenhum commit, push ou deploy foi realizado.
 Commit sugerido: `feat: criar fluxo de verificacao de email`.
+
+## Etapa 4.5 — Homologação local concluída; entrega real pendente
+
+Registro de 06/11/2026. **Fase 4 não declarada homologada**: nenhum envio real foi
+autorizado ou executado, nenhuma aceitação Brevo real foi observada e nenhum
+recebimento foi confirmado pelo destinatário. Nenhuma etapa seguinte foi iniciada.
+
+### Diagnóstico inicial sem impressão de valores
+
+Inspecionados Configuracao/ConfiguracaoBrevo, banco, modelos, HMAC, composição
+transacional, worker, adaptador HTTPS, confirmação/reenvio e integração React.
+backend/.env não existe. Também ausentes no processo inicial: URL_BANCO,
+VERIFICACAO_SEGREDO, OUTBOX_CHAVE, BREVO_API_KEY e BREVO_EMAIL_REMETENTE.
+BREVO_NOME_REMETENTE ausente, mas opcional (padrão Linkai).
+
+As configurações usam env_file=.env relativo ao diretório corrente, com prioridade
+das variáveis do processo. Portanto executar a partir da raiz não carrega
+automaticamente backend/.env. API/worker devem iniciar em backend ou receber o
+ambiente explicitamente. O diagnóstico validou somente presença e formato, sem
+imprimir objetos, valores, endereços, credenciais ou erros com input.
+Não houve consulta de chaves ou chamadas externas ao Brevo.
+
+Padrões revisados: validade 600s, cinco tentativas por desafio, cooldown 60s,
+cinco emissões por 3600s e lease 120s. Códigos usam secrets.randbelow, HMAC-SHA256
+vinculado ao usuário/desafio e compare_digest. A outbox usa Fernet autenticado e
+limpa o envelope em estados terminais. Reservas, fencing e marcação anterior ao
+HTTPS continuam sem transação aberta durante o envio. Timeout de leitura/escrita
+e HTTP 5xx permanecem indeterminados, sem reenvio automático às cegas.
+
+Cookies HttpOnly, SameSite e Secure em produção, CSRF de logout, Origin/CORS
+explícitos, limitação PostgreSQL compartilhada e mensagens neutras foram preservados.
+Testes verificaram ausência de credenciais/tokens nos logs da API. Não há tokens
+de autenticação em localStorage/sessionStorage. HTTP local não homologa HTTPS real.
+
+### Ambiente efetivamente preparado
+
+- Windows, PostgreSQL 18.6 em 127.0.0.1:55432; bancos linkai_homologacao e
+  linkai_e2e para testes, com schemas/fixtures controlados.
+- Banco **novo**, linkai_email_homologacao45, criado somente para o ensaio real
+  futuro. Migrações até 0004 aplicadas. Consulta posterior confirmou zero linhas
+  em usuarios, verificacoes_email, outbox_email e sessoes. Sem dados de produção.
+- .postgres-teste/homologacao45.env criado localmente e comprovadamente ignorado
+  pelo Git. URL local, chaves independentes novas e estáveis, AMBIENTE=teste,
+  CORS http://127.0.0.1:15173, cookie HTTP local e orçamento de uma tentativa.
+  Nenhuma chave Brevo, destinatário ou código foi gravado em arquivos versionados.
+- API FastAPI em 18000 e Vite em 15173 iniciados/encerrados pelo Playwright.
+  Chromium real 158.0.8127.18; worker real não iniciado.
+- Executor curto de homologação validado no modo diagnóstico: zero usuários e
+  intenções, sem criar adaptador HTTPS. Workers reais de aplicação e persistência
+  foram exercitados nos testes com sender falso/MockTransport.
+
+Ao final, API/Vite já encerrados pelo Playwright e PostgreSQL isolado encerrado
+com pg_ctl stop. Banco, migrações e chaves privadas preservados para retomada.
+
+O banco do ensaio real permanece vazio. Não foi criado cadastro para endereço
+inventado nem usado o remetente como destinatário. Configure no arquivo privado
+BREVO_API_KEY e BREVO_EMAIL_REMETENTE autorizado, além de HOMOLOGACAO_DESTINATARIO
+controlado por você. BREVO_NOME_REMETENTE é opcional. Não envie esses segredos no chat.
+As chaves novas locais não substituem nem rotacionam chaves de produção.
+
+### Testes executados antes de qualquer envio real
+
+Primeiro foi executada a regressão existente: 196 backend aprovados/1 ignorado,
+46 frontend e 14 Chromium. Depois foram adicionados testes de homologação e a
+suíte backend completa foi repetida:
+
+| Comando | Resultado observado |
+| --- | --- |
+| pytest -q | 207 aprovados, 1 ignorado, 1 aviso, PostgreSQL real |
+| ruff check . | Aprovado |
+| ruff format --check . | 89 arquivos formatados |
+| npm run test | 46 aprovados |
+| npm run lint | Aprovado |
+| npm run build | TypeScript/Vite aprovados |
+| npm run format:check | Aprovado |
+| npm run test:e2e:tipos | Aprovado |
+| npm run test:e2e | 14 aprovados, Chromium real |
+
+O ignorado é a variante SQLite anterior; transações e concorrência PostgreSQL não
+foram substituídas por mocks. Aviso existente de depreciação Starlette/httpx.
+Ruff inicialmente pediu reformatação de uma asserção nova; corrigida, com check
+e format aprovados depois. Não houve regressão funcional identificada.
+
+Onze novos casos: quatro guardas de banco inválido, banco exclusivo aceito,
+allowlist/orçamento unitário de envio, fluxo completo com caixa falsa e quatro
+falhas de transporte na outbox PostgreSQL. No fluxo completo, cadastro 202 gera
+intenção, login retorna 401, worker falso recebe código só em memória, envelope
+é removido, confirmação retorna 200 sem cookie, reutilização retorna 400, login
+passa, logout exige CSRF e revoga acesso. Conexão indisponível/ConnectTimeout
+reprogramam; ReadTimeout/WriteTimeout tornam indeterminado. Nenhum segundo envio
+imediato nos quatro cenários; todo HTTPS simulado por MockTransport.
+
+A regressão existente ainda cobre cadastro duplicado/concorrente, rollback no
+flush/commit, desafios antigos, expiração, cinco erros persistidos, cooldown/reenvio,
+429, 5xx, orçamento/backoff, workers concorrentes, interrupção antes/depois de
+início, recuperação pendente, cancelamento e resposta de worker antigo sem efeito.
+
+### UX, navegador e evidências
+
+Chromium validou cadastro/redirecionamento, digitação e colagem completa pela área
+de transferência, confirmação simulada, reenvio/cooldown, falhas de rede, reload,
+login/logout com API real e proteção de rotas. Confirmação/reenvio da interface
+usam mocks; fluxo backend com PostgreSQL e sender falso foi testado separadamente.
+Não se declara fluxo completo de entrega externa testado pelo navegador.
+
+375/768/1440 px, altura 900, temas claro/escuro: sem overflow; campos ≥16 px,
+alvos de campos/botões ≥44 px, teclado e foco visível. Contraste medido na tela de
+verificação: botão 5,36:1; texto principal 17,04:1 claro e 18,40:1 escuro;
+link 5,13:1 claro e 10,40:1 escuro. Não equivale a auditoria WCAG completa.
+Leitores de tela reais, Safari/Firefox e dispositivos físicos não foram testados.
+
+- [Resultado E2E](evidencias/fase4/homologacao4.5/resultado-e2e.json).
+- [Medições da verificação](evidencias/fase4/homologacao4.5/verificacao-layout.json).
+- [Ambiente Chromium](evidencias/fase4/homologacao4.5/ambiente-navegador.json).
+- [Celular claro](evidencias/fase4/homologacao4.5/verificacao-375-claro.png).
+- [Desktop escuro](evidencias/fase4/homologacao4.5/verificacao-1440-escuro.png).
+
+Capturas de formulários vazios e fixture mascarada; não contêm códigos, cookies
+ou credenciais reais. Evidências anteriores preservadas em suas pastas.
+
+### Plano de envio real sujeito a autorização
+
+Destinatário: **a definir pelo usuário**, sob seu controle; não será inferido.
+Orçamento proposto: **uma mensagem de cadastro, uma chamada HTTPS**, sem reenvio
+real nesta autorização. Cenário: cadastrar na interface local, observar intenção
+atômica, processar uma vez, conferir aceitação, pedir confirmação de recebimento,
+inserir código diretamente na interface e verificar liberação de login/logout.
+
+Executor: python -m testes.homologacao.envio_controlado, com ambiente privado
+carregado conforme README. Sem argumentos, somente lê contagens e retorna.
+O parâmetro --autorizar-envio-real só pode ser usado após consentimento explícito.
+Não inicie python -m aplicacao.infraestrutura.worker_emails durante esse ensaio:
+o worker contínuo processaria toda a fila e não contém allowlist operacional.
+
+O executor exige modo teste, host local, banco com nome exclusivo e versão 18.6,
+exatamente um usuário não verificado do destinatário indicado e uma intenção
+pendente ainda nunca tentada. Revalida a allowlist no sender, faz só uma chamada
+ao adaptador e força limite_tentativas=1. Sem loop ou seleção de outras filas.
+Resultado pendente com tentativa anterior, indeterminado ou terminal é recusado
+numa execução posterior. Não se deve repetir o comando para forçar recuperação.
+
+Para interromper, Ctrl+C: asyncio cancela a operação; o tratamento existente marca
+indeterminado após início quando possível. Em morte abrupta, lease expirado decide
+recuperação conforme marcação anterior ao HTTPS, sem garantia de entrega única.
+Não há promessa de exactly-once nem de entrega. Em caso de timeout/5xx/resultado
+ambíguo, consultar estado e provedor antes de qualquer autorização adicional.
+
+| Evidência | Status desta execução |
+| --- | --- |
+| Adapter falso/MockTransport e PostgreSQL | Executado e aprovado |
+| Aceitação pela API Brevo real | Não executada |
+| Recebimento na caixa de entrada | Não solicitado/não confirmado |
+| Confirmação com código recebido realmente | Não executada |
+| Reenvio real | Não autorizado/não executado |
+
+Não salvar o código recebido em logs/relatórios nem pedi-lo no chat. Após envio
+autorizado, o usuário confirmará recebimento e digitará o código diretamente na
+interface local. Somente após essa confirmação se pode registrar entrega real.
+
+### Segurança, retenção e bloqueios para lançamento
+
+- Chaves: arquivo privado ignorado não é cofre; permissões de sistema, cópias
+  protegidas e recuperação precisam de política operacional. Não houve rotação.
+- Cifra terminal removida, mas linhas de outbox, verificações, contadores e sessões
+  persistem. Sessões expiradas são recusadas, sem rotina periódica de exclusão.
+  Definir retenção e limpeza em lotes, com backup e validação em homologação.
+- Não excluir histórico de desafios dentro da janela de emissão, nem contadores
+  durante a janela ativa: isso enfraquece as proteções compartilhadas. Sessões
+  expiradas/revogadas podem ter descarte planejado após a retenção aprovada.
+- Rotação Fernet requer interromper novas emissões e workers, inventariar conteúdo
+  pendente/processando e resolver/quarentenar sem reenviar às cegas. Como não há
+  leitura multi-chave, trocar a chave com envelopes antigos impede leitura.
+- Rotação HMAC afeta desafios e contadores por IP. Exige janela de manutenção e
+  plano que preserve limites; não basta gerar nova chave a cada reinício. Aguardar
+  expiração das janelas aplicáveis ou migrar com estratégia auditada antes da troca.
+- Validar HTTPS real, Secure/SameSite, domínio/origem explícitos, proxy confiável,
+  relógios UTC, monitoramento de fila, backlog, resultados indeterminados e alertas.
+- Entrega real confirmada e remetente autorizado ainda não foram comprovados.
+  Recursos/quota da conta precisam ser confirmados pelo titular sem contratar plano pago.
+
+Nenhuma limpeza, exclusão de dados, rotação destrutiva ou alteração em produção
+foi executada. A conclusão se limita à estabilidade automatizada/local observada.
+
+### Arquivos e conclusão
+
+Criados: backend/testes/homologacao/envio_controlado.py,
+backend/testes/unitarios/teste_homologacao_controlada.py,
+backend/testes/integracao/teste_homologacao_email.py e evidências da pasta
+evidencias/fase4/homologacao4.5. Modificados: README, este relatório e comentário
+de frequência em backend/.env.exemplo para refletir o contador PostgreSQL real.
+Nenhuma dependência, endpoint, migração ou funcionalidade pública foi adicionada.
+Configuração privada local não é versionada e não contém credenciais Brevo.
+
+Preparação sem envio concluída. A etapa real está bloqueada por configuração,
+destinatário e autorização explícita; recebimento real continua pendente.
+Não avançar de fase. Nenhum commit, push ou deploy foi executado.
+Commit sugerido: `test: homologar verificacao de email`.
+
+### Atualização — tentativa real única autorizada
+
+Credenciais Brevo passaram a estar presentes no arquivo privado de homologação.
+Foram validados os formatos de configuração, destinatário autorizado, modo teste,
+host/porta locais e banco exclusivo linkai_email_homologacao45. PostgreSQL 18.6,
+migração atualizada e banco vazio confirmados antes do cadastro.
+
+Cadastro executado pelo endpoint existente via transporte ASGI local: HTTP 202,
+exatamente um usuário não verificado, um desafio e uma intenção pendente. Senha
+de homologação aleatória preservada somente no arquivo privado para teste posterior.
+O executor controlado foi chamado uma vez, com limite de uma tentativa HTTPS,
+allowlist unitária e sem worker contínuo. Marcador privado impede repetição acidental
+deste procedimento operacional.
+
+Resultado observado: **outbox em falha, uma tentativa registrada, envelope cifrado
+removido**. O adaptador classificou falha permanente; não houve confirmação de
+aceitação pelo Brevo. O executor não preserva status HTTP/corpo da resposta ou
+identificador de mensagem, portanto não se atribui causa específica à falha.
+Validação sintática local não comprovou autorização do remetente pelo provedor.
+
+Nenhuma retentativa ou reenvio foi executado. Recebimento não confirmado; código
+não foi exibido ou consultado. Nenhum identificador de mensagem disponível.
+Transporte ASGI e conexões encerrados; PostgreSQL isolado encerrado após a tentativa.
+Fase 4 continua não homologada para entrega real, confirmação e login.
+
+Resultado sanitizado: [tentativa real](evidencias/fase4/homologacao4.5/resultado-envio-real.json).
+Qualquer novo envio depende de autorização adicional; a tentativa atual foi consumida.
+
+### Diagnóstico posterior da falha permanente — sem novo envio
+
+O executor e o adaptador foram revisados, as configurações privadas validadas
+sem exibir valores e os logs locais inspecionados sem publicar conteúdo bruto.
+e2e-api.log, postgres.log e servidor.log não contêm URL do endpoint Brevo ou
+messageId. O envio anterior foi executado por ASGI/executor curto e não tinha
+registro do status/corpo da resposta. O JSON sanitizado mantém somente resultado
+genérico. Consulta da outbox em transação READ ONLY confirmou uma linha: estado
+falha, tentativas=1, ultima_falha=falha, dados_cifrados=NULL. Nenhuma linha foi
+reativada ou modificada nesse banco.
+
+**Causa exata não recuperável com as evidências disponíveis.** Não há status HTTP,
+código seguro de erro ou identificador de mensagem preservados. Não se atribui
+a falha a chave inválida, permissões ou remetente não autorizado sem comprovação.
+No adaptador, rejeições HTTP permanentes e falhas locais de validação convergiam
+para EnvioEmailPermanente e, depois, para a categoria genérica falha da outbox.
+Os dados atuais não permitem reconstruir o retorno do provedor.
+
+Revisão do contrato: POST HTTPS /v3/smtp/email, autenticação no cabeçalho api-key,
+JSON com sender, to, subject, htmlContent/textContent e headers opcionais. O formato
+é compatível com a referência oficial; não foi identificada correção comprovada
+de payload. Presença/sintaxe da chave não comprovam validade, permissões, restrições
+de IP ou autorização do remetente. Verificações administrativas na conta continuam
+pendentes; nenhuma consulta autenticada ao provedor foi feita nesta investigação.
+
+Hipóteses ainda não confirmadas:
+
+- HTTP 400: dados/restrições de envio rejeitados pelo provedor.
+- HTTP 401: autenticação da API recusada.
+- HTTP 403: permissão/acesso insuficiente; verificar recurso Transactional email.
+- Estado/autorização do remetente, ativação transacional ou restrições da conta.
+
+Essas são hipóteses, não uma identificação retroativa do status ocorrido.
+Referências oficiais consultadas:
+[contrato de envio](https://developers.brevo.com/reference/send-transac-email),
+[autenticação e códigos](https://developers.brevo.com/docs/how-it-works),
+[permissões da chave](https://help.brevo.com/hc/en-us/articles/40158277171474-About-API-key-permissions).
+Na documentação atual, o recurso Transactional email distingue Read de All;
+Read não permite enviar. Isso não comprova qual permissão a chave local possui.
+
+#### Melhoria mínima de observabilidade
+
+Novo infraestrutura/brevo/diagnostico.py registra somente status_http,
+codigo_provedor em lista fechada, categoria estática e resultado
+permanente/temporario/indeterminado. Valores code desconhecidos, compostos,
+malformados ou potencialmente sensíveis são descartados. Nunca registra message,
+corpo completo, destinatário, código de verificação, payload ou cabeçalhos.
+
+O adaptador registra o diagnóstico da falha final, sem alterar exceções, número
+de tentativas, backoff, tratamento de duplicidade ou regras de indeterminação.
+400/401/403 continuam permanentes; 429 continua temporário; 5xx, resposta ambígua
+e timeout de leitura/escrita continuam indeterminados. Diagnósticos de transporte
+sem resposta têm status/code nulos e categoria técnica sem texto da exceção.
+
+O executor controlado passa a gravar esses registros em
+.postgres-teste/brevo-diagnostico.log, ignorado pelo Git, apenas quando uma futura
+execução real autorizada alcançar o processamento. Handler é removido/fechado ao
+terminar. O worker geral emite os mesmos registros via logging; persistência de
+stderr depende da operação do processo. Nenhuma nova coluna/migração ou mudança
+de contratos públicos foi necessária; ultima_falha da outbox permanece genérica.
+Diagnósticos novos não recuperam dados da execução anterior.
+
+Arquivos criados: infraestrutura/brevo/diagnostico.py e
+testes/unitarios/teste_diagnostico_brevo.py. Modificados: infraestrutura/brevo/envio.py,
+testes/homologacao/envio_controlado.py e este relatório. A mensagem anterior não
+foi reservada, reativada, reprocessada ou reenviada.
+
+Testes com MockTransport cobrem 400, 401, 403, 429, 500 e 503, verificando categoria,
+status, resultado, uma chamada por cenário com orçamento unitário e ausência de
+segredos. Casos adicionais descartam códigos arbitrários, objetos, listas,
+corpos não JSON e texto livre do provedor. Testes anteriores de idempotência,
+timeout, retries limitados e outbox permanecem na regressão backend.
+
+Resultados executados: 65 testes relevantes aprovados inicialmente; regressão
+backend completa com PostgreSQL real: **220 aprovados, 1 ignorado**, com o aviso
+Starlette/httpx já conhecido. Ruff check aprovado e format --check com 91 arquivos
+formatados. Frontend não alterado; testes frontend/E2E não foram repetidos nesta
+investigação. Formatação/imports apontados inicialmente pelo Ruff foram corrigidos.
+
+Próxima homologação depende de revisão administrativa de chave/permissões,
+remetente e conta, definição explícita de um novo desafio no ambiente isolado e
+**nova autorização de envio**. A intenção anterior deve permanecer terminal.
+Nenhum cadastro novo, reenvio, chamada HTTPS de envio, commit, push ou deploy
+foi realizado nesta investigação. Consulta de documentação pública não é envio
+nem consulta autenticada à conta. Fase 4 continua pendente de entrega real,
+confirmação do código e login.
+
+### Pré-validação autenticada — consultas GET autorizadas
+
+Em 06/11/2026, após autorização expressa para consultas somente leitura, foram
+verificados os registros locais e o histórico desta sessão: nenhuma execução
+anterior dessas consultas foi encontrada. Executada uma chamada GET por endpoint,
+com timeout de 10 segundos, retries=0, sem redirects e sem proxies do ambiente.
+
+| Endpoint | Status HTTP | Código seguro | Conclusão |
+| --- | --- | --- | --- |
+| GET /v3/account | 403 | permission_denied | Consulta de conta recusada |
+| GET /v3/senders | 403 | permission_denied | Consulta de remetentes recusada |
+
+Resultados sanitizados em
+[consultas Brevo](evidencias/fase4/homologacao4.5/consultas-brevo.json).
+Marcadores privados por endpoint impedem repetição acidental desse procedimento.
+Corpos completos e cabeçalhos não foram gravados ou exibidos; nenhuma informação
+da conta, remetente, destinatário ou credencial foi registrada nas evidências.
+
+O retorno não permite confirmar conta habilitada ou remetente ativo. Também não
+comprova que a chave seja inválida, nem recupera o status da tentativa de envio
+anterior. Bloqueios de permissões, regras de IP e restrições da conta permanecem
+hipóteses; não foi atribuído motivo específico além de permission_denied.
+
+Correções/verificações necessárias pelo titular no painel Brevo:
+
+- Revisar permissões da chave para consultar a conta e os remetentes, concedendo
+  somente os acessos necessários segundo o painel, sem substituir a chave às cegas.
+- Para futuro envio, confirmar a permissão apropriada de Transactional email;
+  conforme referência oficial já consultada, Read não autoriza envio e All permite
+  operações nesse recurso. Permissões de consulta e de envio não são equivalentes.
+- Revisar eventuais restrições de IP/autorização de acesso e estado da conta.
+- Confirmar que o remetente configurado está ativo/autorizado e que o envio
+  transacional está habilitado. Não foi possível verificar isso pelas consultas.
+
+Nenhum cadastro ou envio foi preparado/executado. PostgreSQL e worker não foram
+iniciados; a intenção anterior em falha não foi acessada ou modificada. Não houve
+retentativa GET, commit, push, deploy ou alteração de código de negócio.
+
+Uma segunda tentativa de envio continua bloqueada. Depois de corrigidas as
+permissões, novas consultas dependerão de autorização para novas chamadas; as
+duas atuais já foram consumidas. Só então definir novo desafio isolado e obter
+autorização específica para uma única tentativa de envio, preservando a intenção
+terminal anterior e mantendo orçamento unitário e allowlist do executor.

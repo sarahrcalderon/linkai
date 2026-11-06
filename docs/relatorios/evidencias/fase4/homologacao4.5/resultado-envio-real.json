@@ -1,0 +1,12 @@
+{
+  "configuracao_validada": true,
+  "cadastro_criado": true,
+  "executor_iniciado": true,
+  "estado_outbox": "falha",
+  "brevo_aceitou": false,
+  "recebimento_confirmado": false,
+  "retentativa_executada": false,
+  "cadastro_http": 202,
+  "tentativas_outbox": 1,
+  "conteudo_cifrado_removido": true
+}

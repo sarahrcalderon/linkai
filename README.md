@@ -834,6 +834,149 @@ Pendências para a Etapa 4.5: homologação autorizada da entrega real, leitores
 HTTPS, outros navegadores/dispositivos e operação/monitoramento conforme planejamento.
 A etapa 4.5 não foi iniciada. Nenhuma nova dependência ou migração foi necessária.
 
+## Etapa 4.5 — Homologação local e envio real pendente
+
+**A Fase 4 ainda não está homologada para entrega real.** Em 06/11/2026 foram
+executados 207 testes backend aprovados e 1 ignorado, 46 frontend e 14 E2E Chromium.
+Ruff, ESLint, Prettier, tipos E2E e build/TypeScript aprovados. Simulações não
+comprovam aceitação pelo Brevo nem recebimento pelo destinatário.
+
+O diagnóstico inicial não encontrou backend/.env ou as variáveis URL_BANCO,
+VERIFICACAO_SEGREDO, OUTBOX_CHAVE, BREVO_API_KEY e BREVO_EMAIL_REMETENTE no processo.
+Configuracao e ConfiguracaoBrevo leem .env **relativo ao diretório corrente**;
+inicie API e worker a partir de backend, ou carregue explicitamente o arquivo local.
+Não imprima os valores nem envie credenciais/códigos pelo chat.
+
+Foi preparado um banco **novo e vazio**, linkai_email_homologacao45, no cluster
+local PostgreSQL 18.6, 127.0.0.1:55432, com migração 0004. A configuração privada
+.postgres-teste/homologacao45.env está ignorada pelo Git e contém URL local, chaves
+de homologação estáveis e CORS para http://127.0.0.1:15173. Não contém credenciais
+Brevo nem destinatário. O cluster foi encerrado após os testes; preserve as chaves
+ao reiniciar. Arquivo ignorado não substitui controle de acesso/cofre de segredos.
+
+Para concluir a configuração **somente nesse arquivo privado**, informe:
+
+- BREVO_API_KEY: chave válida configurada localmente, nunca no repositório/relatório.
+- BREVO_EMAIL_REMETENTE: remetente autorizado na conta Brevo. Validação sintática
+  local não comprova autorização do provedor; ainda não verificada.
+- BREVO_NOME_REMETENTE: opcional, padrão Linkai.
+- HOMOLOGACAO_DESTINATARIO: um endereço de teste sob seu controle, escolhido por você.
+
+Antes de qualquer envio, é necessária autorização explícita para esse destinatário
+e **uma única mensagem de cadastro**. Reenvio real exige autorização adicional.
+Não iniciar o worker contínuo sobre filas anteriores. O executor de homologação
+isolado em testes/homologacao/envio_controlado.py faz apenas diagnóstico por padrão:
+
+```powershell
+cd backend
+.venv/Scripts/python.exe -c "from dotenv import load_dotenv; import runpy; load_dotenv('../.postgres-teste/homologacao45.env', override=True); runpy.run_module('testes.homologacao.envio_controlado', run_name='__main__')"
+```
+
+Somente após autorização, o mesmo comando com `--autorizar-envio-real` permite
+uma execução curta. Exige AMBIENTE=teste, banco local com nome exclusivo e versão
+18.6, exatamente um usuário do destinatário permitido e uma intenção pendente,
+com zero tentativas. A allowlist também é conferida imediatamente antes do envio.
+O adaptador usa limite de uma tentativa HTTPS; o processo não entra em loop.
+Filas antigas, resultados indeterminados e mensagens já tentadas são recusados.
+Ctrl+C interrompe; cancelamento após início usa o tratamento indeterminado existente.
+Não repetir o comando sem revisar o estado e obter autorização.
+
+Para preparar a interface após reiniciar o cluster, sem iniciar envios:
+
+```powershell
+cd backend
+.venv/Scripts/python.exe -m uvicorn aplicacao.principal:app --env-file ../.postgres-teste/homologacao45.env --host 127.0.0.1 --port 18000 --no-proxy-headers
+```
+
+Em outro terminal, frontend: configure VITE_URL_API=http://127.0.0.1:18000 e execute
+`npm run dev -- --host 127.0.0.1 --port 15173 --strictPort`. Cadastre o destinatário
+apenas na sessão autorizada; a API sozinha apenas enfileira, sem enviar.
+Após aceitação pela API Brevo, peça confirmação de recebimento ao destinatário.
+Ele deve inserir o código diretamente na interface local, sem logs/chat/relatório.
+Depois, valide confirmação e login; resposta 201 não equivale a entrega.
+
+Pendências para lançamento público: entrega real confirmada, operação de retenção
+e limpeza de sessões expiradas, rotação planejada/recuperação das chaves, monitoramento
+da fila e resultados indeterminados, HTTPS e navegadores/leitores de tela adicionais.
+Sessões expiradas já são recusadas, mas não há limpeza periódica automática.
+O conteúdo cifrado é removido em estados terminais; linhas/históricos permanecem.
+Nenhuma limpeza ou rotação destrutiva foi executada nesta etapa.
+
+[Relatório e plano de autorização](docs/relatorios/fase4-verificacao-email.md).
+[Resultado Chromium](docs/relatorios/evidencias/fase4/homologacao4.5/resultado-e2e.json).
+
+## Etapa 5.1 — Domínio e persistência de links personalizados
+
+Entidade `Link` independente do ORM, contrato `RepositorioLinks`, implementação
+SQLAlchemy/PostgreSQL e migração incremental **0005**, reversível até 0004.
+Não foram adicionados endpoints, telas, redirecionamento ou analytics.
+
+- UUID do link e do proprietário; nome interno com 2–100 caracteres.
+- Slug global com 3–64 caracteres, trim/lowercase, letras ASCII/números e hífens
+  entre segmentos; nomes reservados são recusados no domínio e no PostgreSQL.
+- WhatsApp normalizado como `+` e 8–15 dígitos, incluindo código do país;
+  remove espaços, parênteses, pontos e hífens. Validação estrutural, sem comprovar
+  atribuição do número, existência da conta WhatsApp ou validade do país.
+- Mensagem opcional de até 2000 caracteres, texto sem `<`/`>` e controles inválidos.
+- Estado ativo, datas UTC com fuso e exclusão lógica (`excluido_em`).
+
+Slug permanece reservado mesmo inativo/excluído. O repositório não oferece exclusão
+física, troca de proprietário nem restauração de exclusão lógica. Na 5.1 o slug
+era imutável; a 5.2 permite alterá-lo explicitamente, conforme descrito abaixo. Consultas
+privadas exigem UUID do proprietário; consulta pública só retorna ativo não excluído.
+A FK RESTRICT impede exclusão física do proprietário com links e preserva a reserva.
+Futuras políticas de remoção de conta devem respeitar essa decisão.
+
+PostgreSQL impõe unicidade global, FK, limites, formato do slug/número, reserva e
+coerência de datas/exclusão. Índice por proprietário/data apoia consultas futuras.
+Savepoint traduz somente conflito da restrição de slug; commit/rollback permanecem
+na unidade de trabalho externa, sem chamadas HTTP.
+
+Validação executada em PostgreSQL 18.6 isolado: **278 testes backend aprovados,
+1 ignorado**, Ruff check/format aprovados. Concorrência de dois proprietários pelo
+mesmo slug persistiu apenas um link. Migração 0005 → 0004 → 0005 validada, preservando
+usuários; reversão remove a tabela de links e exige backup antes de uso operacional.
+[Arquivos, decisões e resultados](docs/relatorios/fase5-links-personalizados.md).
+Etapa 5.2 aguarda aprovação; credenciais, autenticação e Brevo não foram alterados.
+
+## Etapa 5.2 — API autenticada de gerenciamento de links
+
+| Método | Endpoint | Resultado |
+| --- | --- | --- |
+| POST | `/api/links` | 201 após commit |
+| GET | `/api/links?pagina=1&tamanho=20` | Itens próprios, total e paginação |
+| GET | `/api/links/{id}` | Detalhes próprios |
+| PATCH | `/api/links/{id}` | Atualização parcial |
+| DELETE | `/api/links/{id}` | Exclusão lógica, 204 |
+
+Todos exigem sessão válida de usuário ativo com e-mail verificado. Escritas exigem
+Origin permitido e X-CSRF-Token do mecanismo existente. Proprietário vem somente
+da sessão; campos extras/administrativos são recusados. POST recebe nome, slug,
+numero_whatsapp e mensagem opcional. PATCH permite esses campos e ativo; apenas
+mensagem aceita null para limpeza explícita. Objeto vazio no PATCH é recusado.
+
+Respostas de link contêm id, nome, slug, numero_whatsapp, mensagem, ativo, criado_em
+e atualizado_em. Listagem: itens, total, pagina e tamanho; tamanho 1–100, padrão 20,
+página 1–1000000; ordem criado_em DESC/id DESC, incluindo inativos e excluindo
+excluídos. Paginação offset não promete snapshot entre requisições concorrentes.
+
+Slug pode mudar por PATCH; o **slug anterior fica disponível**, sem alias/reserva
+histórica ou redirecionamento. Exclusão lógica conserva permanentemente o slug
+vigente, inclusive contra alteração posterior pelo repositório. Avaliar política
+de históricos antes de publicar redirecionamento em uma etapa futura.
+
+UUID/payload inválido: 422; ausência de sessão: 401; CSRF/Origin inválido: 403;
+recurso inexistente, excluído ou de outro usuário: mesmo 404; slug indisponível:
+409. Escritas limitadas a 16384 bytes reais, inclusive em chunks (413).
+Erros usam o envelope existente e respostas no-store. CORS preserva origens explícitas
+e acrescenta PATCH/DELETE para suportar os novos métodos, sem alterar cookies.
+
+Validação: **309 testes backend aprovados, 1 ignorado**, PostgreSQL 18.6 real;
+Ruff check e format aprovados. Detalhes no
+[relatório da Fase 5](docs/relatorios/fase5-links-personalizados.md).
+Não há nova migração, interface React, redirecionamento, analytics ou integração
+externa nesta etapa. Etapa 5.3 aguarda aprovação.
+
 ## Arquitetura e próximas etapas
 
 Em `backend/src/aplicacao`: domínio independente, contratos e casos de uso,
@@ -845,8 +988,9 @@ Não foram necessárias novas migrações na Etapa 3.2.
 Etapas 3.1–3.5 concluídas no escopo de autenticação e homologação local acima.
 Fase 4: verificação real de e-mail e integração Brevo por abstração.
 O adaptador usa as variáveis BREVO_* descritas acima. `URL_PUBLICA_FRONTEND` permanece
-reservada a necessidades futuras. Links e analytics continuam fora do escopo.
+reservada a necessidades futuras. A Etapa 5.1 implementa modelagem/persistência e
+a 5.2 acrescenta APIs de gestão. Interface, redirecionamento e analytics permanecem pendentes.
 
 Resultados e arquivos: [relatório da Fase 3](docs/relatorios/fase3-autenticacao.md).
-Commit sugerido para a Etapa 4.4: `feat: criar fluxo de verificacao de email`.
+Commit sugerido para a Etapa 4.5: `test: homologar verificacao de email`.
 Nenhum commit, push ou deploy foi executado automaticamente.

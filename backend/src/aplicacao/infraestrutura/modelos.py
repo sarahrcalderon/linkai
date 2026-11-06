@@ -10,6 +10,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     Uuid,
     false,
     text,
@@ -43,6 +44,56 @@ class ModeloUsuario(Base):
     atualizado_em: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, onupdate=agora_utc
     )
+
+
+class ModeloLink(Base):
+    __tablename__ = "links"
+    __table_args__ = (
+        UniqueConstraint("slug", name="uq_links_slug"),
+        CheckConstraint(
+            "length(nome) BETWEEN 2 AND 100 AND nome = trim(nome)", name="ck_links_nome"
+        ),
+        CheckConstraint(
+            "length(slug) BETWEEN 3 AND 64 AND slug = lower(trim(slug))", name="ck_links_slug"
+        ),
+        CheckConstraint("slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'", name="ck_links_slug_formato").ddl_if(
+            dialect="postgresql"
+        ),
+        CheckConstraint("numero_whatsapp ~ '^\\+[1-9][0-9]{7,14}$'", name="ck_links_numero").ddl_if(
+            dialect="postgresql"
+        ),
+        CheckConstraint(
+            "slug NOT IN ('api','admin','login','logout','cadastro','dashboard',"
+            "'verificar-email','reenviar-codigo','static','assets','docs',"
+            "'redoc','openapi','saude','www')",
+            name="ck_links_slug_reservado",
+        ),
+        CheckConstraint(
+            "mensagem IS NULL OR (length(mensagem) <= 2000 "
+            "AND mensagem NOT LIKE '%<%' AND mensagem NOT LIKE '%>%')",
+            name="ck_links_mensagem",
+        ),
+        CheckConstraint("atualizado_em >= criado_em", name="ck_links_datas"),
+        CheckConstraint(
+            "excluido_em IS NULL OR (ativo = false AND excluido_em >= criado_em "
+            "AND excluido_em <= atualizado_em)",
+            name="ck_links_exclusao",
+        ),
+        Index("ix_links_usuario_criado", "usuario_id", "criado_em"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    usuario_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("usuarios.id", ondelete="RESTRICT"), nullable=False
+    )
+    nome: Mapped[str] = mapped_column(String(100), nullable=False)
+    slug: Mapped[str] = mapped_column(String(64), nullable=False)
+    numero_whatsapp: Mapped[str] = mapped_column(String(16), nullable=False)
+    mensagem: Mapped[str | None] = mapped_column(Text)
+    ativo: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=true())
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    atualizado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    excluido_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class ModeloSessao(Base):

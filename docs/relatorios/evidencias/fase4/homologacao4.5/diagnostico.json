@@ -1,0 +1,50 @@
+{
+  "etapa": "4.5",
+  "data": "2026-11-06",
+  "diagnosticoInicial": {
+    "backendEnvPresente": false,
+    "variaveisAusentes": [
+      "URL_BANCO",
+      "VERIFICACAO_SEGREDO",
+      "OUTBOX_CHAVE",
+      "BREVO_API_KEY",
+      "BREVO_EMAIL_REMETENTE"
+    ],
+    "nomeRemetenteOpcionalAusente": true
+  },
+  "ambientePreparado": {
+    "postgresql": "18.6",
+    "banco": "linkai_email_homologacao45",
+    "somenteLocal": true,
+    "migracao": "0004",
+    "usuarios": 0,
+    "verificacoes": 0,
+    "outbox": 0,
+    "sessoes": 0,
+    "configuracaoPrivadaIgnoradaPeloGit": true,
+    "chavesLocaisNovasSemRotacao": true,
+    "executorModoDiagnostico": "aprovado"
+  },
+  "regressao": {
+    "backendAprovados": 207,
+    "backendIgnorados": 1,
+    "frontendAprovados": 46,
+    "chromiumAprovados": 14,
+    "ruffCheck": "aprovado",
+    "ruffFormat": "aprovado",
+    "eslint": "aprovado",
+    "prettier": "aprovado",
+    "build": "aprovado",
+    "tiposE2E": "aprovado"
+  },
+  "envioReal": {
+    "autorizacao": "pendente",
+    "destinatario": "nao_definido",
+    "orcamentoPropostoMensagens": 1,
+    "adaptadorHTTPSRealIniciado": false,
+    "aceitacaoBrevoReal": "nao_executada",
+    "recebimentoReal": "nao_confirmado",
+    "reenvioReal": "nao_autorizado"
+  },
+  "conclusao": "validacao_local_aprovada_entrega_real_pendente"
+}

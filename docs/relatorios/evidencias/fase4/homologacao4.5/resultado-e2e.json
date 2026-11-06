@@ -1,0 +1,76 @@
+{
+  "resultado": "passed",
+  "duracaoMs": 19563.521,
+  "testes": [
+    {
+      "teste": "cadastro 202 uniforme, validação e conta não verificada",
+      "resultado": "passed",
+      "duracaoMs": 1079
+    },
+    {
+      "teste": "credenciais incorretas e conta inexistente permanecem genéricas",
+      "resultado": "passed",
+      "duracaoMs": 541
+    },
+    {
+      "teste": "cookie HttpOnly, CSRF, CORS, reload, logout e revogação reais",
+      "resultado": "passed",
+      "duracaoMs": 568
+    },
+    {
+      "teste": "rota privada sem autenticação e histórico de navegação",
+      "resultado": "passed",
+      "duracaoMs": 369
+    },
+    {
+      "teste": "sessão expirada no PostgreSQL remove acesso",
+      "resultado": "passed",
+      "duracaoMs": 1339
+    },
+    {
+      "teste": "falha de conexão e indisponibilidade real do banco falham com segurança",
+      "resultado": "passed",
+      "duracaoMs": 2643
+    },
+    {
+      "teste": "375, 768 e 1440 px, temas, foco, teclado e evidências visuais",
+      "resultado": "passed",
+      "duracaoMs": 3556
+    },
+    {
+      "teste": "loading real e bloqueio de múltiplos envios",
+      "resultado": "passed",
+      "duracaoMs": 417
+    },
+    {
+      "teste": "limite de tentativas permanece ativo",
+      "resultado": "passed",
+      "duracaoMs": 217
+    },
+    {
+      "teste": "logs da API não registram credenciais ou tokens",
+      "resultado": "passed",
+      "duracaoMs": 2
+    },
+    {
+      "teste": "verificação: colagem completa, confirmação e navegação sem sessão automática",
+      "resultado": "passed",
+      "duracaoMs": 341
+    },
+    {
+      "teste": "verificação: reload permite informar e-mail sem dados na URL",
+      "resultado": "passed",
+      "duracaoMs": 444
+    },
+    {
+      "teste": "verificação: erros neutros, rede, loading, reenvio e cooldown",
+      "resultado": "passed",
+      "duracaoMs": 479
+    },
+    {
+      "teste": "verificação: 375, 768 e 1440 px, temas, contraste e foco",
+      "resultado": "passed",
+      "duracaoMs": 1308
+    }
+  ]
+}

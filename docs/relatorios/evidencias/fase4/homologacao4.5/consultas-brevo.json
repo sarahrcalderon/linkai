@@ -1,0 +1,20 @@
+{
+  "account": {
+    "endpoint": "/v3/account",
+    "iniciada_em": "2026-11-06T16:36:15.179162+00:00",
+    "status": "resposta_recebida",
+    "retentativas": 0,
+    "status_http": 403,
+    "codigo_provedor": "permission_denied",
+    "consulta_aprovada": false
+  },
+  "senders": {
+    "endpoint": "/v3/senders",
+    "iniciada_em": "2026-11-06T16:36:15.817506+00:00",
+    "status": "resposta_recebida",
+    "retentativas": 0,
+    "status_http": 403,
+    "codigo_provedor": "permission_denied",
+    "consulta_aprovada": false
+  }
+}
