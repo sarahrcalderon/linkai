@@ -10,6 +10,7 @@ function useAutenticacao() {
     entrar: gerenciador.entrar,
     sair: gerenciador.sair,
     revalidar: gerenciador.revalidar,
+    executarAutenticado: gerenciador.executarAutenticado,
   };
 }
 

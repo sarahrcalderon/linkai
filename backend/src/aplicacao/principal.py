@@ -10,6 +10,7 @@ from aplicacao.apresentacao.protecao_persistente import ProtecaoPersistente
 from aplicacao.apresentacao.rotas.autenticacao import roteador_autenticacao
 from aplicacao.apresentacao.rotas.cadastro import roteador_cadastro
 from aplicacao.apresentacao.rotas.links import roteador_links
+from aplicacao.apresentacao.rotas.redirecionamento import roteador_redirecionamento
 from aplicacao.apresentacao.rotas.saude import roteador_saude
 from aplicacao.apresentacao.rotas.verificacao_email import roteador_verificacao
 from aplicacao.configuracao import Configuracao
@@ -65,6 +66,7 @@ def criar_aplicacao(configuracao: Configuracao | None = None) -> FastAPI:
         allow_headers=["Content-Type", "X-CSRF-Token"],
     )
     app.include_router(roteador_saude, prefix="/api")
+    app.include_router(roteador_redirecionamento)
     app.include_router(roteador_links, prefix="/api")
     app.include_router(roteador_cadastro, prefix="/api")
     app.include_router(roteador_autenticacao, prefix="/api")

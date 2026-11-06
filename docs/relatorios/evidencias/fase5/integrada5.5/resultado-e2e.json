@@ -1,0 +1,21 @@
+{
+  "resultado": "passed",
+  "duracaoMs": 22446.751,
+  "testes": [
+    {
+      "teste": "integrado real: login, CRUD, PostgreSQL, clipboard e redirecionamento sem seguir destino",
+      "resultado": "passed",
+      "duracaoMs": 7529
+    },
+    {
+      "teste": "integrado real: paginação, ordenação, IDOR, CSRF, Origin, expiração e erros neutros",
+      "resultado": "passed",
+      "duracaoMs": 1951
+    },
+    {
+      "teste": "integrado real: UX, loading, erro e dez combinações responsivas com dados PostgreSQL",
+      "resultado": "passed",
+      "duracaoMs": 7706
+    }
+  ]
+}

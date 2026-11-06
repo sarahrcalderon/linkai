@@ -977,6 +977,120 @@ Ruff check e format aprovados. Detalhes no
 Não há nova migração, interface React, redirecionamento, analytics ou integração
 externa nesta etapa. Etapa 5.3 aguarda aprovação.
 
+## Etapa 5.3 — Redirecionamento público para WhatsApp
+
+`GET /r/{slug}` é servido na **raiz do backend**, fora de /api. Sem sessão/CSRF,
+consulta somente links ativos não excluídos e retorna **302**, com destino fixo
+`https://wa.me/`. Número usa os dígitos internacionais sem `+`; texto usa
+percent-encoding UTF-8. Mensagem null/vazia não produz parâmetro text.
+
+Exemplos fictícios:
+
+- Sem mensagem: `https://wa.me/5511999999999`.
+- Texto “Olá mundo”: `https://wa.me/5511999999999?text=Ol%C3%A1%20mundo`.
+- Quebra de linha e emoji são preservados, codificados como `%0A` e UTF-8.
+
+Slug inválido/reservado, inexistente, inativo ou excluído recebe o mesmo 404
+padronizado/no-store. Slug bruto limitado a 64 caracteres, com validação antes
+de SQL. Renomear libera o endereço anterior conforme 5.2; se outro link reutilizar
+o slug, o endereço passa a representar esse novo link. Não há aliases ou histórico.
+Parâmetros de destino enviados na query são ignorados; host/scheme de destino
+nunca vêm do cliente. Nenhum cookie, script, rastreador ou contagem é adicionado.
+
+302 usa `Cache-Control: no-store, max-age=0` e `Referrer-Policy: no-referrer`.
+O número e a mensagem ficam **públicos no cabeçalho Location/URL do WhatsApp** e
+podem constar no histórico do navegador/serviço de destino. Não coloque segredos
+na mensagem. O backend não faz chamada ao WhatsApp e não registra o destino.
+
+Em desenvolvimento, execute backend e Vite. O proxy Vite encaminha `/r/` para
+o origin configurado em `VITE_URL_API` (padrão local http://localhost:8000), antes
+do fallback SPA, preservando caminho e 302 sem seguir o destino. Nenhuma rota React
+foi criada. Acesse o link por navegação normal/URL direta, não por LinkInterno.
+
+Em produção, o proxy de desenvolvimento não acompanha o build. Configure `/r/`
+no gateway **antes do fallback SPA**, preservando o caminho e devolvendo 302/Location
+ao navegador, sem cache; alternativamente use domínio público que aponte diretamente
+ao backend. Frontend e API podem estar em domínios diferentes: o endereço compartilhado
+deve usar o domínio que efetivamente serve essa rota. Não use regras SPA que convertam
+`/r/` em index.html nem redirects permanentes. Detalhes e exemplo de gateway no
+[relatório da Fase 5](docs/relatorios/fase5-links-personalizados.md).
+
+Não registrar query strings, cabeçalho Location, payloads ou corpos em logs/APM
+desse fluxo. Para homologação privada, use Uvicorn com `--no-access-log` e desative
+access logs da rota no gateway. Logs padrão de acesso não registram o Location,
+mas podem guardar a query recebida se alguém inserir dados nela.
+
+Validação desta etapa: **348 testes backend aprovados, 1 ignorado**, PostgreSQL
+18.6 real; Ruff aprovado (106 arquivos formatados). Frontend: 46 testes, lint,
+Prettier e build aprovados; proxy Vite validado com backend falso local.
+Sem migração nova, alterações de autenticação, envio de e-mail ou chamada externa.
+Etapa 5.4 aguarda aprovação.
+
+## Etapa 5.4 — Dashboard de gerenciamento de links
+
+A rota privada `/dashboard` mantém a sessão existente e agora mostra **Meus links**,
+com estado vazio/loading/erro, criação, edição, ativação/desativação, cópia, abertura
+e exclusão confirmada. Não mostra métricas ou cliques fictícios. A listagem usa
+GET /api/links, dez itens por página; edição consulta detalhes atuais antes de abrir.
+
+Formulário valida nome/slug/WhatsApp/texto e mostra prévia da URL sem prometer
+disponibilidade. PATCH envia somente diferenças; apagar mensagem envia null.
+Renomear avisa que o endereço antigo será liberado. Exclusão informa que o link
+deixa de funcionar, o slug fica reservado e não há desfazer pela interface.
+Diálogos contêm foco/Tab, permitem Escape seguro e confirmam descarte de alterações.
+beforeunload protege recarga/saída quando suportado pelo navegador.
+
+CSRF permanece em memória no gerenciador existente; nenhuma credencial é gravada
+em armazenamento do navegador. Operações autenticadas tratam 401 removendo a sessão
+local e orientando novo login. Cookies HttpOnly e Origin seguem o contrato existente.
+Não houve mudança de backend/autenticação HTTP ou Brevo nesta etapa.
+
+URL pública usa o origin atual no desenvolvimento, aproveitando o proxy /r/ da 5.3.
+Em produção com domínio de links separado, configure no frontend
+`VITE_URL_PUBLICA_LINKS=https://links.exemplo.com`, apontando para o origin que serve
+/r/. É configuração pública, não segredo. Abertura usa âncora normal com
+noopener/noreferrer, sem antecipar requisição ao WhatsApp. Falha de clipboard
+orienta cópia manual da URL completa mostrada no cartão.
+
+Validação: **62 testes frontend**, **17 E2E Chromium**, ESLint, tipos E2E,
+Prettier e build/TypeScript aprovados. Os três E2E novos de dashboard usam API
+simulada; a regressão de autenticação existente usa PostgreSQL local real.
+Larguras 320/375/768/1024/1440 nos dois temas passaram sem overflow, com campos
+legíveis, botões ≥44 px e contrastes medidos ≥4,5:1 nos elementos avaliados.
+[Evidências](docs/relatorios/evidencias/fase5/dashboard5.4/dashboard-layout.json) e
+[relatório](docs/relatorios/fase5-links-personalizados.md).
+
+Etapa 5.5 aguarda aprovação. Não há analytics, alterações no redirecionamento,
+envio de e-mail, novo endpoint ou dependência adicional.
+
+## Etapa 5.5 — Homologação integrada local
+
+Dashboard homologado com React/Vite, FastAPI e PostgreSQL **18.6 reais**, em
+Chromium, usando somente contas fictícias verificadas pela fixture local. Login
+e cookies/CSRF usam o contrato normal da aplicação; não há bypass público.
+
+`npm run test:e2e:integrado` executa três cenários exclusivos: CRUD/consulta SQL,
+paginação/isolamento/segurança e UX nas cinco larguras/dois temas. A suíte anterior
+continua em `npm run test:e2e` (17 cenários, incluindo os mocks documentados da 5.4).
+Execute sequencialmente: ambas usam as mesmas portas e o banco exclusivo linkai_e2e,
+e a preparação remove os dados fictícios desse banco antes de cada suíte.
+
+Configure URL_BANCO_E2E somente para o banco local de testes linkai_e2e;
+PLAYWRIGHT_BROWSERS_PATH pode apontar ao Chromium instalado. Cada suíte inicia e
+encerra API/Vite automaticamente; nenhuma precisa de credencial Brevo ou worker.
+E2E_PASTA_EVIDENCIAS separa as evidências para evitar sobrescrever o histórico.
+
+Validação: **348 backend aprovados/1 ignorado**, **62 frontend**, **17 E2E anteriores
+e 3 novos E2E reais aprovados**, Ruff, TypeScript, ESLint, Prettier e build aprovados.
+O helper SQL é somente leitura e retorna booleans, sem imprimir registros.
+Corrigido retorno de foco após GET assíncrono de edição; dados UTF-8 são comparados
+corretamente pelo helper no Windows. HTTP 302 foi inspecionado sem seguir WhatsApp.
+
+[Relatório com classificação dos cenários](docs/relatorios/fase5-links-personalizados.md) e
+[evidências reais](docs/relatorios/evidencias/fase5/integrada5.5/layout-real.json).
+Homologação é local; produção, dispositivos físicos/outros navegadores e entrega
+real de e-mail permanecem fora dessa conclusão. Não houve deploy ou envio externo.
+
 ## Arquitetura e próximas etapas
 
 Em `backend/src/aplicacao`: domínio independente, contratos e casos de uso,
@@ -989,7 +1103,8 @@ Etapas 3.1–3.5 concluídas no escopo de autenticação e homologação local a
 Fase 4: verificação real de e-mail e integração Brevo por abstração.
 O adaptador usa as variáveis BREVO_* descritas acima. `URL_PUBLICA_FRONTEND` permanece
 reservada a necessidades futuras. A Etapa 5.1 implementa modelagem/persistência e
-a 5.2 acrescenta APIs de gestão. Interface, redirecionamento e analytics permanecem pendentes.
+a 5.2 acrescenta APIs de gestão; a 5.3 disponibiliza redirecionamento público.
+A 5.4 acrescenta interface de gestão. Analytics permanece pendente.
 
 Resultados e arquivos: [relatório da Fase 3](docs/relatorios/fase3-autenticacao.md).
 Commit sugerido para a Etapa 4.5: `test: homologar verificacao de email`.

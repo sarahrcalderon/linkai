@@ -13,6 +13,19 @@ export class GerenciadorAutenticacao {
   private mutacaoPendente = false;
 
   obterEstado = () => this.estado;
+  executarAutenticado = async <T>(operacao: (csrf: string) => Promise<T>): Promise<T> => {
+    if (this.estado.situacao !== 'autenticado') throw new ErroHTTP(401, 'Entre novamente.');
+    const versao = this.versao;
+    try {
+      return await operacao(this.csrf);
+    } catch (erro) {
+      if (erro instanceof ErroHTTP && erro.status === 401 && versao === this.versao) {
+        ++this.versao;
+        this.limpar('Sua sessão expirou. Entre novamente.');
+      }
+      throw erro;
+    }
+  };
   inscrever = (ouvinte: () => void) => {
     this.ouvintes.add(ouvinte);
     return () => {

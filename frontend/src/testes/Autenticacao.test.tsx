@@ -32,7 +32,11 @@ beforeEach(() => {
     if (String(url).endsWith('/api/usuarios/me')) return erro(401);
     throw new Error(`Requisição não prevista no teste: ${url}`);
   });
-  vi.stubGlobal('fetch', buscar);
+  vi.stubGlobal('fetch', (url: RequestInfo | URL, opcoes?: RequestInit) =>
+    String(url).includes('/api/links')
+      ? Promise.resolve(resposta(200, { itens: [], total: 0, pagina: 1, tamanho: 10 }))
+      : buscar(url, opcoes),
+  );
 });
 afterEach(() => {
   vi.unstubAllGlobals();

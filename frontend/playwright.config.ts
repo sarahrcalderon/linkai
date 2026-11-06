@@ -17,6 +17,7 @@ if (!['127.0.0.1', 'localhost'].includes(banco.hostname) || banco.pathname !== '
 export default defineConfig({
   testDir: './e2e',
   testMatch: '**/*.spec.ts',
+  testIgnore: '**/links-reais.spec.ts',
   globalSetup: './e2e/preparar.ts',
   workers: 1,
   fullyParallel: false,

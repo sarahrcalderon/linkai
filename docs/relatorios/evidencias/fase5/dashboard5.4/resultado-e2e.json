@@ -1,0 +1,91 @@
+{
+  "resultado": "passed",
+  "duracaoMs": 23040.564,
+  "testes": [
+    {
+      "teste": "cadastro 202 uniforme, validação e conta não verificada",
+      "resultado": "passed",
+      "duracaoMs": 895
+    },
+    {
+      "teste": "credenciais incorretas e conta inexistente permanecem genéricas",
+      "resultado": "passed",
+      "duracaoMs": 484
+    },
+    {
+      "teste": "cookie HttpOnly, CSRF, CORS, reload, logout e revogação reais",
+      "resultado": "passed",
+      "duracaoMs": 511
+    },
+    {
+      "teste": "rota privada sem autenticação e histórico de navegação",
+      "resultado": "passed",
+      "duracaoMs": 306
+    },
+    {
+      "teste": "sessão expirada no PostgreSQL remove acesso",
+      "resultado": "passed",
+      "duracaoMs": 1066
+    },
+    {
+      "teste": "falha de conexão e indisponibilidade real do banco falham com segurança",
+      "resultado": "passed",
+      "duracaoMs": 2228
+    },
+    {
+      "teste": "375, 768 e 1440 px, temas, foco, teclado e evidências visuais",
+      "resultado": "passed",
+      "duracaoMs": 3039
+    },
+    {
+      "teste": "loading real e bloqueio de múltiplos envios",
+      "resultado": "passed",
+      "duracaoMs": 347
+    },
+    {
+      "teste": "limite de tentativas permanece ativo",
+      "resultado": "passed",
+      "duracaoMs": 191
+    },
+    {
+      "teste": "logs da API não registram credenciais ou tokens",
+      "resultado": "passed",
+      "duracaoMs": 2
+    },
+    {
+      "teste": "dashboard: CRUD de interface com API simulada e CSRF, sem serviços externos",
+      "resultado": "passed",
+      "duracaoMs": 891
+    },
+    {
+      "teste": "dashboard: foco nativo, contenção de Tab, Escape e descarte seguro",
+      "resultado": "passed",
+      "duracaoMs": 314
+    },
+    {
+      "teste": "dashboard: cinco larguras, dois temas, URLs longas e diálogos sem overflow",
+      "resultado": "passed",
+      "duracaoMs": 6253
+    },
+    {
+      "teste": "verificação: colagem completa, confirmação e navegação sem sessão automática",
+      "resultado": "passed",
+      "duracaoMs": 282
+    },
+    {
+      "teste": "verificação: reload permite informar e-mail sem dados na URL",
+      "resultado": "passed",
+      "duracaoMs": 309
+    },
+    {
+      "teste": "verificação: erros neutros, rede, loading, reenvio e cooldown",
+      "resultado": "passed",
+      "duracaoMs": 405
+    },
+    {
+      "teste": "verificação: 375, 768 e 1440 px, temas, contraste e foco",
+      "resultado": "passed",
+      "duracaoMs": 1129
+    }
+  ]
+}

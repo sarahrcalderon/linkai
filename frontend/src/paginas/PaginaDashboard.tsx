@@ -5,6 +5,7 @@ import { Cabecalho } from '../componentes/Cabecalho';
 import { Feedback } from '../componentes/Feedback';
 import { usarAutenticacao } from '../funcionalidades/autenticacao/usarAutenticacao';
 import { navegar } from '../navegacao/usarNavegacao';
+import { MeusLinks } from '../funcionalidades/links/MeusLinks';
 
 export function PaginaDashboard() {
   const { usuario, sair, revalidar } = usarAutenticacao();
@@ -32,18 +33,12 @@ export function PaginaDashboard() {
     <main className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
       <div className="mx-auto max-w-6xl px-5 sm:px-8">
         <Cabecalho />
-        <section className="mx-auto max-w-2xl py-12 sm:py-20" aria-labelledby="titulo-dashboard">
+        <section className="mx-auto py-8 sm:py-12" aria-labelledby="titulo-dashboard">
           <h1 id="titulo-dashboard" className="text-3xl font-bold break-words">
             Olá, {usuario?.nome}.
           </h1>
           <p className="mt-4 leading-relaxed">Sua conta está conectada ao Linkai.</p>
           <p className="mt-2 break-all opacity-75">{usuario?.email}</p>
-          <div className="my-8 rounded-2xl border border-current/15 p-6">
-            <h2 className="text-xl font-semibold">Seu espaço está pronto</h2>
-            <p className="mt-3 leading-relaxed opacity-75">
-              Os recursos de links e estatísticas estarão disponíveis em breve.
-            </p>
-          </div>
           <Feedback mensagem={erro} />
           <div className="mt-5 flex flex-wrap gap-3" aria-busy={ocupado}>
             <Botao variante="secundaria" disabled={ocupado} onClick={() => void executar(false)}>
@@ -53,6 +48,7 @@ export function PaginaDashboard() {
               <LogOut size={18} aria-hidden="true" /> {ocupado ? 'Aguarde…' : 'Sair'}
             </Botao>
           </div>
+          <MeusLinks />
         </section>
       </div>
     </main>

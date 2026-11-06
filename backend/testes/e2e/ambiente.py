@@ -70,6 +70,14 @@ async def executar(operacao: str) -> None:
                     email_verificado=True,
                 )
                 await conexao.execute(ModeloUsuario.__table__.insert().values(**vars(usuario)))
+                if os.getenv("E2E_LINKS_REAIS") == "1":
+                    outro = Usuario(
+                        nome="Outra pessoa de teste",
+                        email="outro@example.com",
+                        senha_hash=await HashSenhaArgon2id().gerar(senha),
+                        email_verificado=True,
+                    )
+                    await conexao.execute(ModeloUsuario.__table__.insert().values(**vars(outro)))
             elif operacao == "expirar":
                 await conexao.execute(
                     update(ModeloSessao)

@@ -1,0 +1,32 @@
+[
+  {
+    "largura": 375,
+    "tema": "claro",
+    "contrasteBotao": 5.363999913316052
+  },
+  {
+    "largura": 375,
+    "tema": "escuro",
+    "contrasteBotao": 5.363999913316052
+  },
+  {
+    "largura": 768,
+    "tema": "claro",
+    "contrasteBotao": 5.363999913316052
+  },
+  {
+    "largura": 768,
+    "tema": "escuro",
+    "contrasteBotao": 5.363999913316052
+  },
+  {
+    "largura": 1440,
+    "tema": "claro",
+    "contrasteBotao": 5.363999913316052
+  },
+  {
+    "largura": 1440,
+    "tema": "escuro",
+    "contrasteBotao": 5.363999913316052
+  }
+]
