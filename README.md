@@ -473,6 +473,75 @@ correção compatível e revalidar antes de ampliar exposição das ferramentas.
 Permanece o aviso conhecido Starlette/httpx no TestClient, sem falha da suíte.
 Verificação de e-mail e Brevo continuam exclusivamente reservados à Fase 4.
 
+## Etapa 4.1 — Estrutura interna de verificação de e-mail
+
+Domínio e infraestrutura para desafios temporários de seis dígitos, com uso único,
+limite de tentativas e reenvio controlado. **Sem novas rotas ou telas, geração no
+cadastro ou envio real.** Os endpoints da Fase 3 mantêm seus contratos; contas
+recém-cadastradas continuam bloqueadas até verificação.
+
+Código gerado por `secrets.randbelow`, persistido somente como HMAC-SHA-256,
+vinculado ao usuário e ao UUID do desafio. Confirmação usa comparação segura.
+O segredo do servidor impede enumeração offline do espaço numérico a partir do
+banco isoladamente. Não registre o código nem o segredo em logs.
+
+| Variável | Padrão/uso |
+| --- | --- |
+| `VERIFICACAO_SEGREDO` | Sem padrão; segredo aleatório com pelo menos 32 bytes UTF-8 |
+| `VERIFICACAO_VALIDADE_SEGUNDOS` | 600 (10 minutos) |
+| `VERIFICACAO_LIMITE_TENTATIVAS` | 5 erros por desafio |
+| `VERIFICACAO_INTERVALO_REENVIO` | 60 segundos entre emissões |
+| `VERIFICACAO_LIMITE_ENVIOS` | 5 emissões por janela |
+| `VERIFICACAO_JANELA_ENVIOS` | 3600 segundos |
+
+O segredo é necessário somente para instanciar o novo serviço interno, não para
+iniciar a API existente. Gere-o com fonte criptográfica, como `secrets.token_urlsafe(32)`,
+e configure apenas no ambiente/gerenciador de segredos. Não use uma senha humana,
+placeholder ou chave das fixtures. Os processos devem compartilhar o mesmo segredo.
+Rotação invalida códigos pendentes; ainda não há versionamento de chaves.
+
+`criar_verificacao_email(banco, configuracao)` compõe o serviço `VerificarEmail`.
+Contratos internos: `gerar_desafio(usuario_id)`, `confirmar(usuario_id, codigo)` e
+`invalidar(usuario_id)`. Geração também prepara o reenvio. `DesafioGerado` é um
+DTO interno com código protegido por SecretStr, destinado ao futuro serviço de
+entrega, nunca a uma resposta HTTP. `ServicoEnvioEmail` é somente uma interface.
+Nenhum cliente ou credencial Brevo foi configurado.
+
+As operações bloqueiam a linha do usuário em uma transação. O consumo e a alteração
+de `email_verificado` são atômicos; tentativa incorreta é persistida, mesmo retornando
+falso. Reenvio invalida os códigos anteriores e evita repetir números recentes.
+O índice parcial impede dois desafios pendentes do mesmo usuário. Limites de emissão
+usam histórico no PostgreSQL, incluindo desafios já invalidados; não remova esse
+histórico antes do fim da janela. A futura camada HTTP deverá preservar respostas
+uniformes para solicitação/reenvio, sem revelar a existência de contas.
+
+Migração corrente: **0003**. No backend, com banco local configurado:
+
+```bash
+alembic upgrade head
+alembic current
+pytest
+pytest testes/unitarios/teste_verificacao_email.py testes/integracao/teste_verificacao_email.py -q
+ruff check .
+ruff format --check .
+```
+
+`alembic downgrade 0002` remove os desafios, preservando usuários e sessões;
+use apenas em banco descartável. `alembic upgrade head` recria a estrutura.
+Não há alteração automática do estado dos usuários durante a migração.
+
+Validação 4.1 em PostgreSQL 18.6 real: **127 testes backend aprovados, 1 ignorado**;
+Ruff aprovado. Frontend: **29 testes**, ESLint e build/TypeScript aprovados.
+Também foram reexecutados os **10 E2E Chromium da Fase 3**, todos aprovados.
+O teste ignorado continua sendo a variante SQLite de concorrência da Fase 3.
+Concorrência, índice único, falha no commit e rollback da verificação foram
+homologados em PostgreSQL, sem substituição por mocks.
+
+Pendências para a próxima etapa: composição com solicitação pública protegida,
+adaptador de envio pelo contrato, entrega após commit, retentativas, respostas
+uniformes e experiência de confirmação. Não avance automaticamente para essas
+funcionalidades. Relatório e arquivos: [Etapa 4.1](docs/relatorios/fase4-verificacao-email.md).
+
 ## Arquitetura e próximas etapas
 
 Em `backend/src/aplicacao`: domínio independente, contratos e casos de uso,
@@ -487,5 +556,5 @@ Variáveis futuras previstas, ainda não utilizadas: `BREVO_API_KEY`, `EMAIL_REM
 `NOME_REMETENTE` e `URL_PUBLICA_FRONTEND`. Links e analytics também ficam fora do escopo.
 
 Resultados e arquivos: [relatório da Fase 3](docs/relatorios/fase3-autenticacao.md).
-Commit sugerido para a Etapa 3.5: `test: homologar fluxo de autenticacao`.
+Commit sugerido para a Etapa 4.1: `feat: estruturar verificacao de email`.
 Nenhum commit, push ou deploy foi executado automaticamente.

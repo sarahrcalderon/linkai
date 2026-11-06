@@ -57,7 +57,7 @@ async def executar(operacao: str) -> None:
                     command.upgrade(configuracao, "head")
 
                 await conexao.run_sync(migrar)
-                await conexao.execute(text("TRUNCATE sessoes, usuarios"))
+                await conexao.execute(text("TRUNCATE verificacoes_email, sessoes, usuarios"))
                 usuario = Usuario(
                     nome="Pessoa de teste",
                     email="verificado@example.com",

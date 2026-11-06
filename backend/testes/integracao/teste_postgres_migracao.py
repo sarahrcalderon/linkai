@@ -38,7 +38,7 @@ async def test_upgrade_downgrade_upgrade_postgres():
             await conexao.execute(text(f'SET LOCAL search_path TO "{esquema}"'))
             await conexao.run_sync(migrar, command.upgrade, "head")
             await conexao.run_sync(verificar_modelos)
-            assert await conexao.scalar(text("SELECT version_num FROM alembic_version")) == "0002"
+            assert await conexao.scalar(text("SELECT version_num FROM alembic_version")) == "0003"
         # A reversão exclusiva da 3.3 deve preservar usuários da 3.2.
         async with motor.begin() as conexao:
             await conexao.execute(text(f'SET LOCAL search_path TO "{esquema}"'))
@@ -49,6 +49,14 @@ async def test_upgrade_downgrade_upgrade_postgres():
                 ),
                 {"id": uuid4()},
             )
+            await conexao.run_sync(migrar, command.downgrade, "0002")
+            assert await conexao.scalar(text("SELECT count(*) FROM usuarios")) == 1
+            tabelas = await conexao.run_sync(
+                lambda sincronica: inspect(sincronica).get_table_names()
+            )
+            assert "verificacoes_email" not in tabelas and "sessoes" in tabelas
+            await conexao.run_sync(migrar, command.upgrade, "head")
+            await conexao.run_sync(verificar_modelos)
             await conexao.run_sync(migrar, command.downgrade, "0001")
             assert await conexao.scalar(text("SELECT count(*) FROM usuarios")) == 1
             tabelas = await conexao.run_sync(

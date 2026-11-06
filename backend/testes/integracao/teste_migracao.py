@@ -17,7 +17,7 @@ def test_migracao_postgres_offline(monkeypatch):
     assert "senha" not in sql.replace("senha_hash", "")
     saida.seek(0)
     saida.truncate()
-    command.downgrade(configuracao, "0002:base", sql=True)
+    command.downgrade(configuracao, "0003:base", sql=True)
     assert "DROP TABLE usuarios" in saida.getvalue()
     assert "DROP TABLE sessoes" in saida.getvalue()
 

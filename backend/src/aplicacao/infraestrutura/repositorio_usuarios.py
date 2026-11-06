@@ -1,7 +1,7 @@
-from datetime import UTC
+from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,6 +32,17 @@ class RepositorioUsuariosSQLAlchemy:
     async def obter_por_email(self, email: str) -> Usuario | None:
         consulta = select(ModeloUsuario).where(ModeloUsuario.email == email.strip().lower())
         return self._converter(await self.sessao.scalar(consulta))
+
+    async def obter_para_atualizacao(self, identificador: UUID) -> Usuario | None:
+        consulta = select(ModeloUsuario).where(ModeloUsuario.id == identificador).with_for_update()
+        return self._converter(await self.sessao.scalar(consulta))
+
+    async def marcar_email_verificado(self, identificador: UUID, agora: datetime) -> None:
+        await self.sessao.execute(
+            update(ModeloUsuario)
+            .where(ModeloUsuario.id == identificador)
+            .values(email_verificado=True, atualizado_em=agora)
+        )
 
     @staticmethod
     def _converter(modelo: ModeloUsuario | None) -> Usuario | None:

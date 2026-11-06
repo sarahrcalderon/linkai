@@ -16,6 +16,12 @@ class Configuracao(BaseSettings):
     sessao_duracao_segundos: int = Field(default=28800, ge=60, le=604800)
     sessao_cookie_seguro: bool | None = None
     sessao_cookie_samesite: Literal["lax", "strict", "none"] = "lax"
+    verificacao_segredo: SecretStr | None = Field(default=None, repr=False)
+    verificacao_validade_segundos: int = Field(default=600, ge=60, le=3600)
+    verificacao_limite_tentativas: int = Field(default=5, ge=1, le=10)
+    verificacao_intervalo_reenvio: int = Field(default=60, ge=1, le=86400)
+    verificacao_limite_envios: int = Field(default=5, ge=1, le=100)
+    verificacao_janela_envios: int = Field(default=3600, ge=60, le=86400)
 
     @property
     def cookie_seguro(self) -> bool:
@@ -23,6 +29,11 @@ class Configuracao(BaseSettings):
 
     @model_validator(mode="after")
     def validar_seguranca(self):
+        if (
+            self.verificacao_segredo is not None
+            and len(self.verificacao_segredo.get_secret_value().encode("utf-8")) < 32
+        ):
+            raise ValueError("Segredo de verificação deve ter pelo menos 32 bytes.")
         if self.ambiente not in {"desenvolvimento", "teste", "producao"}:
             raise ValueError("AMBIENTE deve ser desenvolvimento, teste ou producao.")
         if self.ambiente == "producao" and self.sessao_cookie_seguro is False:
@@ -46,4 +57,4 @@ class Configuracao(BaseSettings):
                 raise ValueError("Origens de produção devem usar HTTPS.")
         return self
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore", hide_input_in_errors=True)

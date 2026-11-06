@@ -1,7 +1,19 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, String, Uuid, false, true
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Uuid,
+    false,
+    text,
+    true,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from aplicacao.dominio.usuario import agora_utc
@@ -47,3 +59,35 @@ class ModeloSessao(Base):
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     expira_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     revogado_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ModeloVerificacaoEmail(Base):
+    __tablename__ = "verificacoes_email"
+    __table_args__ = (
+        CheckConstraint("expira_em > criado_em", name="ck_verificacoes_prazo"),
+        CheckConstraint("length(codigo_hash) = 64", name="ck_verificacoes_hash"),
+        CheckConstraint(
+            "limite_tentativas > 0 AND tentativas >= 0 AND tentativas <= limite_tentativas",
+            name="ck_verificacoes_tentativas",
+        ),
+        Index("ix_verificacoes_usuario_criado", "usuario_id", "criado_em"),
+        Index(
+            "ix_verificacoes_pendente",
+            "usuario_id",
+            unique=True,
+            postgresql_where=text("utilizado_em IS NULL AND invalidado_em IS NULL"),
+            sqlite_where=text("utilizado_em IS NULL AND invalidado_em IS NULL"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    usuario_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False
+    )
+    codigo_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expira_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    utilizado_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    invalidado_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    tentativas: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    limite_tentativas: Mapped[int] = mapped_column(Integer, nullable=False)
