@@ -1,0 +1,166 @@
+{
+  "resultado": "passed",
+  "duracaoMs": 36826.597,
+  "testes": [
+    {
+      "teste": "Analytics 320px tema claro: layout, teclado e tabela",
+      "resultado": "passed",
+      "duracaoMs": 651
+    },
+    {
+      "teste": "Analytics 320px tema escuro: layout, teclado e tabela",
+      "resultado": "passed",
+      "duracaoMs": 608
+    },
+    {
+      "teste": "Analytics 375px tema claro: layout, teclado e tabela",
+      "resultado": "passed",
+      "duracaoMs": 568
+    },
+    {
+      "teste": "Analytics 375px tema escuro: layout, teclado e tabela",
+      "resultado": "passed",
+      "duracaoMs": 588
+    },
+    {
+      "teste": "Analytics 768px tema claro: layout, teclado e tabela",
+      "resultado": "passed",
+      "duracaoMs": 583
+    },
+    {
+      "teste": "Analytics 768px tema escuro: layout, teclado e tabela",
+      "resultado": "passed",
+      "duracaoMs": 602
+    },
+    {
+      "teste": "Analytics 1024px tema claro: layout, teclado e tabela",
+      "resultado": "passed",
+      "duracaoMs": 620
+    },
+    {
+      "teste": "Analytics 1024px tema escuro: layout, teclado e tabela",
+      "resultado": "passed",
+      "duracaoMs": 639
+    },
+    {
+      "teste": "Analytics 1440px tema claro: layout, teclado e tabela",
+      "resultado": "passed",
+      "duracaoMs": 595
+    },
+    {
+      "teste": "Analytics 1440px tema escuro: layout, teclado e tabela",
+      "resultado": "passed",
+      "duracaoMs": 605
+    },
+    {
+      "teste": "seleciona link próprio e retorna ao resumo sem lista adicional",
+      "resultado": "passed",
+      "duracaoMs": 512
+    },
+    {
+      "teste": "rede indisponível, repetição e período sem acessos",
+      "resultado": "passed",
+      "duracaoMs": 418
+    },
+    {
+      "teste": "401 de métricas encerra a sessão pela proteção existente",
+      "resultado": "passed",
+      "duracaoMs": 333
+    },
+    {
+      "teste": "troca rápida de período não mostra resposta antiga e mantém loading",
+      "resultado": "passed",
+      "duracaoMs": 451
+    },
+    {
+      "teste": "link removido ou não autorizado não revela estatísticas",
+      "resultado": "passed",
+      "duracaoMs": 459
+    },
+    {
+      "teste": "cadastro 202 uniforme, validação e conta não verificada",
+      "resultado": "passed",
+      "duracaoMs": 971
+    },
+    {
+      "teste": "credenciais incorretas e conta inexistente permanecem genéricas",
+      "resultado": "passed",
+      "duracaoMs": 588
+    },
+    {
+      "teste": "cookie HttpOnly, CSRF, CORS, reload, logout e revogação reais",
+      "resultado": "passed",
+      "duracaoMs": 660
+    },
+    {
+      "teste": "rota privada sem autenticação e histórico de navegação",
+      "resultado": "passed",
+      "duracaoMs": 378
+    },
+    {
+      "teste": "sessão expirada no PostgreSQL remove acesso",
+      "resultado": "passed",
+      "duracaoMs": 1164
+    },
+    {
+      "teste": "falha de conexão e indisponibilidade real do banco falham com segurança",
+      "resultado": "passed",
+      "duracaoMs": 2300
+    },
+    {
+      "teste": "375, 768 e 1440 px, temas, foco, teclado e evidências visuais",
+      "resultado": "passed",
+      "duracaoMs": 3825
+    },
+    {
+      "teste": "loading real e bloqueio de múltiplos envios",
+      "resultado": "passed",
+      "duracaoMs": 421
+    },
+    {
+      "teste": "limite de tentativas permanece ativo",
+      "resultado": "passed",
+      "duracaoMs": 249
+    },
+    {
+      "teste": "logs da API não registram credenciais ou tokens",
+      "resultado": "passed",
+      "duracaoMs": 2
+    },
+    {
+      "teste": "dashboard: CRUD de interface com API simulada e CSRF, sem serviços externos",
+      "resultado": "passed",
+      "duracaoMs": 1007
+    },
+    {
+      "teste": "dashboard: foco nativo, contenção de Tab, Escape e descarte seguro",
+      "resultado": "passed",
+      "duracaoMs": 429
+    },
+    {
+      "teste": "dashboard: cinco larguras, dois temas, URLs longas e diálogos sem overflow",
+      "resultado": "passed",
+      "duracaoMs": 8130
+    },
+    {
+      "teste": "verificação: colagem completa, confirmação e navegação sem sessão automática",
+      "resultado": "passed",
+      "duracaoMs": 349
+    },
+    {
+      "teste": "verificação: reload permite informar e-mail sem dados na URL",
+      "resultado": "passed",
+      "duracaoMs": 391
+    },
+    {
+      "teste": "verificação: erros neutros, rede, loading, reenvio e cooldown",
+      "resultado": "passed",
+      "duracaoMs": 502
+    },
+    {
+      "teste": "verificação: 375, 768 e 1440 px, temas, contraste e foco",
+      "resultado": "passed",
+      "duracaoMs": 1383
+    }
+  ]
+}

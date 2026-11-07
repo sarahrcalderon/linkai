@@ -3,6 +3,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
 
+from aplicacao.casos_de_uso.consultar_estatisticas import PeriodoEstatisticasInvalido
 from aplicacao.casos_de_uso.contratos_autenticacao import (
     CredenciaisInvalidas,
     CsrfInvalido,
@@ -12,39 +13,62 @@ from aplicacao.casos_de_uso.gerenciar_links import DadosLinkInvalidos
 from aplicacao.dominio.repositorio_links import LinkNaoEncontrado, SlugJaUtilizado
 
 
-def resposta_erro(codigo: str, mensagem: str, status: int, **detalhes) -> JSONResponse:
+def resposta_erro(
+    codigo: str, mensagem: str, status: int, *, requisicao: Request | None = None, **detalhes
+) -> JSONResponse:
+    caminho = requisicao.url.path.rstrip("/") if requisicao else ""
+    privada = caminho == "/api/estatisticas/resumo" or (
+        caminho.startswith("/api/links/") and caminho.endswith("/estatisticas")
+    )
     return JSONResponse(
         status_code=status,
         content={"erro": {"codigo": codigo, "mensagem": mensagem, **detalhes}},
-        headers={"Cache-Control": "no-store"},
+        headers={"Cache-Control": "private, no-store" if privada else "no-store"},
     )
 
 
 def registrar_tratamento_erros(app: FastAPI) -> None:
+    @app.exception_handler(PeriodoEstatisticasInvalido)
+    async def tratar_periodo(requisicao: Request, erro: PeriodoEstatisticasInvalido):
+        return resposta_erro(
+            "dados_invalidos", "Escolha período de 7, 30 ou 90 dias.", 422, requisicao=requisicao
+        )
+
     @app.exception_handler(LinkNaoEncontrado)
     async def tratar_link_ausente(requisicao: Request, erro: LinkNaoEncontrado):
-        return resposta_erro("link_nao_encontrado", "Link não encontrado.", 404)
+        return resposta_erro(
+            "link_nao_encontrado", "Link não encontrado.", 404, requisicao=requisicao
+        )
 
     @app.exception_handler(SlugJaUtilizado)
     async def tratar_slug(requisicao: Request, erro: SlugJaUtilizado):
-        return resposta_erro("slug_indisponivel", "Slug indisponível.", 409)
+        return resposta_erro("slug_indisponivel", "Slug indisponível.", 409, requisicao=requisicao)
 
     @app.exception_handler(DadosLinkInvalidos)
     async def tratar_dados_link(requisicao: Request, erro: DadosLinkInvalidos):
-        return resposta_erro("dados_invalidos", "Revise os dados do link.", 422)
+        return resposta_erro(
+            "dados_invalidos", "Revise os dados do link.", 422, requisicao=requisicao
+        )
 
     @app.exception_handler(CredenciaisInvalidas)
     async def tratar_credenciais(requisicao: Request, erro: CredenciaisInvalidas):
-        return resposta_erro("credenciais_invalidas", "E-mail ou senha inválidos.", 401)
+        return resposta_erro(
+            "credenciais_invalidas", "E-mail ou senha inválidos.", 401, requisicao=requisicao
+        )
 
     @app.exception_handler(SessaoInvalida)
     async def tratar_sessao(requisicao: Request, erro: SessaoInvalida):
-        return resposta_erro("sessao_invalida", "Autenticação necessária.", 401)
+        return resposta_erro(
+            "sessao_invalida", "Autenticação necessária.", 401, requisicao=requisicao
+        )
 
     @app.exception_handler(CsrfInvalido)
     async def tratar_csrf(requisicao: Request, erro: CsrfInvalido):
         return resposta_erro(
-            "csrf_invalido", "Não foi possível validar a origem da solicitação.", 403
+            "csrf_invalido",
+            "Não foi possível validar a origem da solicitação.",
+            403,
+            requisicao=requisicao,
         )
 
     @app.exception_handler(RequestValidationError)
@@ -85,6 +109,16 @@ def registrar_tratamento_erros(app: FastAPI) -> None:
             mensagens.pop("nome")
             mensagens["senha"] = "Informe uma senha com 1 a 128 caracteres."
             mensagem_corpo = "Envie apenas e-mail e senha em um objeto JSON válido."
+        if requisicao.url.path.rstrip(
+            "/"
+        ) == "/api/estatisticas/resumo" or requisicao.url.path.rstrip("/").endswith(
+            "/estatisticas"
+        ):
+            mensagens = {
+                "dias": "Escolha 7, 30 ou 90 dias.",
+                "identificador": "Informe um UUID válido.",
+            }
+            mensagem_corpo = "Informe apenas o período permitido."
         campos = []
         for detalhe in erro.errors():
             local = detalhe["loc"]
@@ -98,12 +132,21 @@ def registrar_tratamento_erros(app: FastAPI) -> None:
                     "mensagem": mensagens.get(campo, mensagem_corpo),
                 }
             )
-        return resposta_erro("dados_invalidos", "Revise os dados informados.", 422, campos=campos)
+        return resposta_erro(
+            "dados_invalidos",
+            "Revise os dados informados.",
+            422,
+            requisicao=requisicao,
+            campos=campos,
+        )
 
     # Exceções de banco são tratadas dentro do ExceptionMiddleware, antes do CORS.
     @app.exception_handler(SQLAlchemyError)
     @app.exception_handler(Exception)
     async def tratar_falha(requisicao: Request, erro: Exception):
         return resposta_erro(
-            "servico_indisponivel", "Não foi possível concluir a solicitação. Tente novamente.", 503
+            "servico_indisponivel",
+            "Não foi possível concluir a solicitação. Tente novamente.",
+            503,
+            requisicao=requisicao,
         )

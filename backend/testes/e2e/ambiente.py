@@ -59,7 +59,7 @@ async def executar(operacao: str) -> None:
                 await conexao.run_sync(migrar)
                 await conexao.execute(
                     text(
-                        "TRUNCATE links, outbox_email, limites_requisicoes, "
+                        "TRUNCATE eventos_acesso, links, outbox_email, limites_requisicoes, "
                         "verificacoes_email, sessoes, usuarios"
                     )
                 )

@@ -8,6 +8,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Configuracao(BaseSettings):
     url_banco: SecretStr | None = None
     ambiente: str = "desenvolvimento"
+    email_provedor: Literal["desativado", "mailpit", "brevo"] = "desativado"
+    smtp_host: Literal["localhost", "127.0.0.1", "::1"] = "127.0.0.1"
+    smtp_porta: int = Field(default=1025, ge=1, le=65535)
+    smtp_remetente: str = Field(default="nao-responda@linkai.test", max_length=254, repr=False)
+    smtp_timeout_segundos: float = Field(default=5, gt=0, le=15, allow_inf_nan=False)
+    analytics_prazo_segundos: float = Field(default=0.5, ge=0.01, le=5, allow_inf_nan=False)
     origens_permitidas: list[str] = ["http://localhost:5173"]
     cadastro_limite_tentativas: int = Field(default=5, ge=1, le=1000)
     cadastro_janela_segundos: int = Field(default=900, ge=1, le=86400)
@@ -34,6 +40,10 @@ class Configuracao(BaseSettings):
 
     @model_validator(mode="after")
     def validar_seguranca(self):
+        if self.email_provedor == "mailpit" and (
+            self.ambiente != "desenvolvimento" or self.smtp_porta != 1025
+        ):
+            raise ValueError("Mailpit exige desenvolvimento e porta SMTP local 1025.")
         if (
             self.verificacao_segredo is not None
             and len(self.verificacao_segredo.get_secret_value().encode("utf-8")) < 32

@@ -72,6 +72,7 @@ async function publico(page: Page, slug: string, status: number, mensagem?: stri
 }
 
 test.beforeEach(async ({ context }) => {
+  operarBanco('preparar');
   // Apenas uma guarda: nenhuma resposta de API é simulada nesta suíte.
   await context.route('**/*', (rota) => {
     const url = new URL(rota.request().url());
@@ -88,7 +89,7 @@ test('integrado real: login, CRUD, PostgreSQL, clipboard e redirecionamento sem 
 }) => {
   expect(consultarBanco({ operacao: 'metadados' })).toEqual({
     postgresql: '18.6',
-    revisao: '0005',
+    revisao: '0006',
   });
   await entrar(page);
   await page.reload();

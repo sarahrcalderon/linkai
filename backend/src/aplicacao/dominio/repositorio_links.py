@@ -12,12 +12,14 @@ class LinkNaoEncontrado(Exception):
     """Recurso ausente ou pertencente a outro usuário."""
 
 
-class RepositorioLinks(Protocol):
+class ConsultaLinkPublico(Protocol):
+    async def obter_publico_por_slug(self, slug: str) -> Link | None: ...
+
+
+class RepositorioLinks(ConsultaLinkPublico, Protocol):
     async def adicionar(self, link: Link) -> None: ...
 
     async def obter_por_id(self, identificador: UUID, usuario_id: UUID) -> Link | None: ...
-
-    async def obter_publico_por_slug(self, slug: str) -> Link | None: ...
 
     async def atualizar(self, link: Link) -> None: ...
 

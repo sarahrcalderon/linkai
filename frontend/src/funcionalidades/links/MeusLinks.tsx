@@ -6,7 +6,13 @@ import { FormularioLink } from './FormularioLink';
 import { servicoLinks, urlPublica, type LinkPersonalizado } from './servico';
 import { usarLinks } from './usarLinks';
 
-export function MeusLinks() {
+export function MeusLinks({
+  consultarEstatisticas,
+  aoAlterar,
+}: {
+  consultarEstatisticas?: (link: LinkPersonalizado) => void;
+  aoAlterar?: () => void;
+}) {
   const lista = usarLinks();
   const [formulario, definirFormulario] = useState<{
     link: LinkPersonalizado | null;
@@ -35,7 +41,10 @@ export function MeusLinks() {
     try {
       await acao();
       definirMensagem(sucesso);
-      if (recarregar) lista.recarregar();
+      if (recarregar) {
+        lista.recarregar();
+        aoAlterar?.();
+      }
     } catch (falha) {
       definirErro(falha instanceof Error ? falha.message : 'Não foi possível concluir a operação.');
     } finally {
@@ -73,6 +82,7 @@ export function MeusLinks() {
       definirExclusao(null);
       definirMensagem('Link excluído. O slug permanece reservado.');
       lista.recarregar();
+      aoAlterar?.();
     } catch (falha) {
       definirErroExclusao(
         falha instanceof Error ? falha.message : 'Não foi possível excluir o link.',
@@ -160,6 +170,16 @@ export function MeusLinks() {
                       Abrir
                     </Botao>
                   )}
+                  {consultarEstatisticas && (
+                    <Botao
+                      variante="secundaria"
+                      disabled={ocupado}
+                      onClick={() => consultarEstatisticas(link)}
+                      aria-label={`Estatísticas de ${link.nome}`}
+                    >
+                      Estatísticas
+                    </Botao>
+                  )}
                   <Botao
                     variante="secundaria"
                     disabled={ocupado}
@@ -230,6 +250,7 @@ export function MeusLinks() {
             definirFormulario(null);
             definirErro('');
             definirMensagem(formulario.link ? 'Link atualizado.' : 'Link criado.');
+            aoAlterar?.();
             if (!formulario.link) lista.definirPagina(1);
             lista.recarregar();
           }}

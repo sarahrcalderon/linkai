@@ -1,0 +1,58 @@
+{
+  "ambiente": "PostgreSQL local isolado; dados sinteticos; sem garantia de capacidade produtiva",
+  "medicoes": [
+    {
+      "dias": 7,
+      "eventos_sinteticos": 30000,
+      "consultas_agregacao": 1,
+      "total": 2331,
+      "duracao_ms": 7.745,
+      "planejamento_ms": 0.346,
+      "execucao_plano_ms": 1.573,
+      "nos": [
+        "Sort",
+        "Nested Loop",
+        "Aggregate",
+        "Index Scan",
+        "WindowAgg",
+        "Aggregate",
+        "Sort",
+        "Hash Join",
+        "Bitmap Heap Scan",
+        "Bitmap Index Scan",
+        "Hash",
+        "Index Scan"
+      ],
+      "indices": [
+        "ix_links_usuario_criado",
+        "ix_eventos_acessado_em",
+        "ix_links_usuario_criado"
+      ]
+    },
+    {
+      "dias": 90,
+      "eventos_sinteticos": 30000,
+      "consultas_agregacao": 1,
+      "total": 30000,
+      "duracao_ms": 11.6,
+      "planejamento_ms": 0.267,
+      "execucao_plano_ms": 10.244,
+      "nos": [
+        "Sort",
+        "Nested Loop",
+        "Aggregate",
+        "Index Scan",
+        "WindowAgg",
+        "Aggregate",
+        "Hash Join",
+        "Seq Scan",
+        "Hash",
+        "Index Scan"
+      ],
+      "indices": [
+        "ix_links_usuario_criado",
+        "ix_links_usuario_criado"
+      ]
+    }
+  ]
+}

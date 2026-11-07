@@ -1,0 +1,15 @@
+{
+  "navegador": "Chromium",
+  "versao": "156.0.8078.80",
+  "plataforma": "win32",
+  "larguras": [
+    375,
+    768,
+    1440
+  ],
+  "altura": 900,
+  "temas": [
+    "claro",
+    "escuro"
+  ]
+}

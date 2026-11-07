@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Aplicacao } from '../Aplicacao';
+import { fixtureEstatisticas } from './fixtureEstatisticas';
 
 const sessao = {
   usuario: {
@@ -33,9 +34,11 @@ beforeEach(() => {
     throw new Error(`Requisição não prevista no teste: ${url}`);
   });
   vi.stubGlobal('fetch', (url: RequestInfo | URL, opcoes?: RequestInit) =>
-    String(url).includes('/api/links')
-      ? Promise.resolve(resposta(200, { itens: [], total: 0, pagina: 1, tamanho: 10 }))
-      : buscar(url, opcoes),
+    String(url).includes('/api/estatisticas/')
+      ? Promise.resolve(resposta(200, fixtureEstatisticas()))
+      : String(url).includes('/api/links')
+        ? Promise.resolve(resposta(200, { itens: [], total: 0, pagina: 1, tamanho: 10 }))
+        : buscar(url, opcoes),
   );
 });
 afterEach(() => {

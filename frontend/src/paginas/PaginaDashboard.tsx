@@ -5,6 +5,8 @@ import { Cabecalho } from '../componentes/Cabecalho';
 import { Feedback } from '../componentes/Feedback';
 import { usarAutenticacao } from '../funcionalidades/autenticacao/usarAutenticacao';
 import { navegar } from '../navegacao/usarNavegacao';
+import { Analytics } from '../funcionalidades/estatisticas/Analytics';
+import type { LinkPersonalizado } from '../funcionalidades/links/servico';
 import { MeusLinks } from '../funcionalidades/links/MeusLinks';
 
 export function PaginaDashboard() {
@@ -12,6 +14,15 @@ export function PaginaDashboard() {
   const [ocupado, definirOcupado] = useState(false);
   const [erro, definirErro] = useState('');
   const bloqueado = useRef(false);
+  const [revisaoEstatisticas, definirRevisaoEstatisticas] = useState(0);
+  const [linkEstatisticas, definirLinkEstatisticas] = useState<LinkPersonalizado | null>(null);
+  function selecionarEstatisticas(link: LinkPersonalizado | null) {
+    definirLinkEstatisticas(link);
+    window.requestAnimationFrame(() => {
+      document.getElementById('titulo-analytics')?.focus();
+      document.getElementById('analytics')?.scrollIntoView?.({ block: 'start' });
+    });
+  }
   async function executar(encerrar: boolean) {
     if (bloqueado.current) return;
     bloqueado.current = true;
@@ -48,7 +59,18 @@ export function PaginaDashboard() {
               <LogOut size={18} aria-hidden="true" /> {ocupado ? 'Aguarde…' : 'Sair'}
             </Botao>
           </div>
-          <MeusLinks />
+          <Analytics
+            key={revisaoEstatisticas}
+            link={linkEstatisticas}
+            voltar={() => selecionarEstatisticas(null)}
+          />
+          <MeusLinks
+            consultarEstatisticas={selecionarEstatisticas}
+            aoAlterar={() => {
+              definirLinkEstatisticas(null);
+              definirRevisaoEstatisticas((valor) => valor + 1);
+            }}
+          />
         </section>
       </div>
     </main>

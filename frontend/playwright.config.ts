@@ -17,7 +17,7 @@ if (!['127.0.0.1', 'localhost'].includes(banco.hostname) || banco.pathname !== '
 export default defineConfig({
   testDir: './e2e',
   testMatch: '**/*.spec.ts',
-  testIgnore: '**/links-reais.spec.ts',
+  testIgnore: '**/*-reais.spec.ts',
   globalSetup: './e2e/preparar.ts',
   workers: 1,
   fullyParallel: false,
@@ -28,6 +28,7 @@ export default defineConfig({
   use: {
     baseURL: 'http://127.0.0.1:15173',
     browserName: 'chromium',
+    channel: process.env.E2E_CANAL || undefined,
     viewport: { width: 1440, height: 900 },
     trace: 'off',
     screenshot: 'off',

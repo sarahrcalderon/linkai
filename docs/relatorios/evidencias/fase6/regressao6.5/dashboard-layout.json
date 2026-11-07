@@ -1,0 +1,145 @@
+{
+  "navegador": "156.0.8078.80",
+  "medidas": [
+    {
+      "largura": 320,
+      "tema": "claro",
+      "listaSemOverflow": true,
+      "semOverflow": true,
+      "naTela": true,
+      "camposLegiveis": true,
+      "botoesAdequados": true,
+      "contrastes": {
+        "texto": 17.041924491285634,
+        "botao": 5.363999913316052,
+        "erro": 4.558922220336682
+      }
+    },
+    {
+      "largura": 320,
+      "tema": "escuro",
+      "listaSemOverflow": true,
+      "semOverflow": true,
+      "naTela": true,
+      "camposLegiveis": true,
+      "botoesAdequados": true,
+      "contrastes": {
+        "texto": 18.39954673866569,
+        "botao": 5.363999913316052,
+        "erro": 6.978862379998893
+      }
+    },
+    {
+      "largura": 375,
+      "tema": "claro",
+      "listaSemOverflow": true,
+      "semOverflow": true,
+      "naTela": true,
+      "camposLegiveis": true,
+      "botoesAdequados": true,
+      "contrastes": {
+        "texto": 17.041924491285634,
+        "botao": 5.363999913316052,
+        "erro": 4.558922220336682
+      }
+    },
+    {
+      "largura": 375,
+      "tema": "escuro",
+      "listaSemOverflow": true,
+      "semOverflow": true,
+      "naTela": true,
+      "camposLegiveis": true,
+      "botoesAdequados": true,
+      "contrastes": {
+        "texto": 18.39954673866569,
+        "botao": 5.363999913316052,
+        "erro": 6.978862379998893
+      }
+    },
+    {
+      "largura": 768,
+      "tema": "claro",
+      "listaSemOverflow": true,
+      "semOverflow": true,
+      "naTela": true,
+      "camposLegiveis": true,
+      "botoesAdequados": true,
+      "contrastes": {
+        "texto": 17.041924491285634,
+        "botao": 5.363999913316052,
+        "erro": 4.558922220336682
+      }
+    },
+    {
+      "largura": 768,
+      "tema": "escuro",
+      "listaSemOverflow": true,
+      "semOverflow": true,
+      "naTela": true,
+      "camposLegiveis": true,
+      "botoesAdequados": true,
+      "contrastes": {
+        "texto": 18.39954673866569,
+        "botao": 5.363999913316052,
+        "erro": 6.978862379998893
+      }
+    },
+    {
+      "largura": 1024,
+      "tema": "claro",
+      "listaSemOverflow": true,
+      "semOverflow": true,
+      "naTela": true,
+      "camposLegiveis": true,
+      "botoesAdequados": true,
+      "contrastes": {
+        "texto": 17.041924491285634,
+        "botao": 5.363999913316052,
+        "erro": 4.558922220336682
+      }
+    },
+    {
+      "largura": 1024,
+      "tema": "escuro",
+      "listaSemOverflow": true,
+      "semOverflow": true,
+      "naTela": true,
+      "camposLegiveis": true,
+      "botoesAdequados": true,
+      "contrastes": {
+        "texto": 18.39954673866569,
+        "botao": 5.363999913316052,
+        "erro": 6.978862379998893
+      }
+    },
+    {
+      "largura": 1440,
+      "tema": "claro",
+      "listaSemOverflow": true,
+      "semOverflow": true,
+      "naTela": true,
+      "camposLegiveis": true,
+      "botoesAdequados": true,
+      "contrastes": {
+        "texto": 17.041924491285634,
+        "botao": 5.363999913316052,
+        "erro": 4.558922220336682
+      }
+    },
+    {
+      "largura": 1440,
+      "tema": "escuro",
+      "listaSemOverflow": true,
+      "semOverflow": true,
+      "naTela": true,
+      "camposLegiveis": true,
+      "botoesAdequados": true,
+      "contrastes": {
+        "texto": 18.39954673866569,
+        "botao": 5.363999913316052,
+        "erro": 6.978862379998893
+      }
+    }
+  ]
+}

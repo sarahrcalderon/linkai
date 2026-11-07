@@ -1091,6 +1091,93 @@ corretamente pelo helper no Windows. HTTP 302 foi inspecionado sem seguir WhatsA
 Homologação é local; produção, dispositivos físicos/outros navegadores e entrega
 real de e-mail permanecem fora dessa conclusão. Não houve deploy ou envio externo.
 
+## Etapa 6.1 — Modelagem e persistência de eventos de acesso
+
+Criados domínio `EventoDeAcesso`, contrato/repositório e tabela PostgreSQL
+`eventos_acesso`, na migração incremental **0006**. Evento possui somente UUID,
+UUID do link e instante UTC. Não contém IP, User-Agent, sessão, cookies, dispositivo,
+telefone ou cópia de slug/mensagem. UUID do evento identifica a linha, não o visitante.
+
+Consulta interna exige proprietário, link e intervalo `[início, fim)`, com limite
+de até 1000 registros, ordenação por instante/UUID e uma única consulta SQL.
+Índices por link/instante/UUID e instante apoiam consultas temporais e retenção futura.
+Exclusão lógica do link conserva o histórico; exclusão física administrativa
+cascateia eventos para não deixar registros órfãos. Nenhuma remoção automática.
+
+Política inicial proposta: retenção de **90 dias** contados do instante UTC do
+evento, inclusive para links excluídos logicamente. A limpeza/retirada de backups
+precisa de operação planejada antes da captura; não há TTL ou job implementado.
+Os indicadores futuros representarão **acessos registrados**, não visitantes
+únicos, conversas iniciadas ou mensagens enviadas.
+
+Na 6.1 o redirecionamento ainda não capturava eventos; a 6.2 integra o registro
+best effort descrito abaixo. Sem endpoints de métricas, agregações ou gráficos.
+Validação: **377 testes backend aprovados, 1 ignorado**, PostgreSQL 18.6 isolado;
+Ruff check/format aprovados, incluindo downgrade/upgrade 0006 ↔ 0005.
+[Relatório da Fase 6](docs/relatorios/fase6-analytics.md).
+
+## Etapa 6.2 — Registro automático de acessos
+
+GET `/r/{slug}` tenta registrar um evento mínimo após resolver um link ativo e
+não excluído. A consulta termina antes da gravação; analytics usa sessão e
+transação próprias. Registro ocorre antes da resposta, sem fila ou BackgroundTasks.
+`ANALYTICS_PRAZO_SEGUNDOS` padrão 0.5 (0.01–5s) limita cooperativamente a operação,
+incluindo aquisição de conexão e commit; rollback/fechamento podem acrescentar tempo.
+
+Falhas esperadas de banco/pool/conexão ou timeout são best effort: não impedem
+o 302 nem expõem detalhes ao visitante. Não há retentativa. Erros de programação
+como TypeError não são tratados genericamente como perda normal de analytics.
+404 e slugs inválidos/reservados não geram eventos. Location/UTF-8/no-store,
+privacidade e ausência de sessão/CSRF/cookies permanecem iguais.
+
+Ponto de validade: leitura concluída que encontrou link ativo/não excluído.
+Desativação/exclusão lógica posterior não cancela esse acesso já resolvido; um
+próximo acesso retorna 404. Remoção física antes da gravação pode impedir evento
+pela FK, mantendo o redirect. Não há garantia exatamente uma vez ou de entrega
+do 302 ao cliente; timeout perto do commit pode ter resultado indeterminado.
+
+Logger `aplicacao.casos_de_uso.registrar_acesso`: INFO `evento_acesso_registrado`
+após commit; WARNING `evento_acesso_nao_confirmado` com categoria estática. Não
+registra IDs, IP, User-Agent, cookies, tokens, WhatsApp, mensagem ou URL de destino.
+Configure handler/nível INFO desse namespace para observar sucessos sem habilitar
+logs de SQL/payload. Não existe contador de perdas durável; warnings não comprovam
+número exato de eventos perdidos. A retenção proposta de 90 dias continua sem job.
+
+Validação: **397 testes backend aprovados, 1 ignorado**, Ruff aprovado. PostgreSQL
+real confirmou três GETs 302 → três eventos; após desativação, 404 sem incremento.
+[Cenários e limitações](docs/relatorios/fase6-analytics.md).
+Etapa 6.3 não iniciada; sem alterações de autenticação, Brevo ou dashboard.
+
+## Etapa 6.3 — API autenticada de estatísticas
+
+- GET `/api/links/{id}/estatisticas?dias=7`: total e série diária de link próprio.
+- GET `/api/estatisticas/resumo?dias=7`: links ativos/inativos e acessos consolidados.
+
+`dias` aceita somente 7, 30 ou 90, padrão 7. Inclui o dia atual **parcial** em UTC:
+da meia-noite do primeiro dia até o instante da consulta, limite final exclusivo.
+Não é janela móvel de N×24h. Séries vêm em ordem cronológica com zeros nos dias vazios.
+Respostas contêm total_acessos, data_inicial, data_final e serie_diaria de
+`{data, acessos}`; individual acrescenta link_id; resumo acrescenta links_ativos
+e links_inativos. Não retorna eventos ou dados de visitantes.
+
+Proprietário vem da sessão existente; query extra é rejeitada. Ausente/excluído/
+de terceiros recebe o mesmo 404. Resumo inclui links ativos e inativos, sempre
+próprios e não excluídos; histórico excluído permanece no banco, fora do resumo atual.
+Contagens de links representam o estado atual, sem filtro de data de criação.
+Cache-Control private, no-store nos sucessos e erros desses endpoints.
+
+COUNT/GROUP BY/funções de janela no PostgreSQL, uma instrução de agregação por
+consulta. Python só organiza resultados agregados e preenche zeros. Sem N+1,
+índice novo, migração ou mudança na captura best effort. Métricas refletem apenas
+eventos persistidos/visíveis no snapshot; perdas, commits em andamento e resultados
+indeterminados da 6.2 continuam possíveis. Não representam pessoas ou conversas.
+
+Validação: **434 testes backend aprovados, 1 ignorado**, Ruff aprovado. Ensaio
+sintético com 30000 eventos e planos reais registrado no
+[relatório](docs/relatorios/fase6-analytics.md) e nas
+[evidências](docs/relatorios/evidencias/fase6/desempenho6.3.json), sem alegação de
+capacidade produtiva. Etapa 6.4 aguarda aprovação; não há dashboard de analytics.
+
 ## Arquitetura e próximas etapas
 
 Em `backend/src/aplicacao`: domínio independente, contratos e casos de uso,
@@ -1104,7 +1191,9 @@ Fase 4: verificação real de e-mail e integração Brevo por abstração.
 O adaptador usa as variáveis BREVO_* descritas acima. `URL_PUBLICA_FRONTEND` permanece
 reservada a necessidades futuras. A Etapa 5.1 implementa modelagem/persistência e
 a 5.2 acrescenta APIs de gestão; a 5.3 disponibiliza redirecionamento público.
-A 5.4 acrescenta interface de gestão. Analytics permanece pendente.
+A 5.4 acrescenta interface de gestão; a 6.1 prepara persistência mínima de eventos.
+A 6.2 acrescenta captura best effort e a 6.3 APIs autenticadas de estatísticas;
+gráficos e interface de analytics permanecem pendentes.
 
 Resultados e arquivos: [relatório da Fase 3](docs/relatorios/fase3-autenticacao.md).
 Commit sugerido para a Etapa 4.5: `test: homologar verificacao de email`.

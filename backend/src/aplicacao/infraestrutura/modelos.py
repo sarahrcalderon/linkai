@@ -96,6 +96,20 @@ class ModeloLink(Base):
     excluido_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class ModeloEventoAcesso(Base):
+    __tablename__ = "eventos_acesso"
+    __table_args__ = (
+        Index("ix_eventos_link_instante_id", "link_id", "acessado_em", "id"),
+        Index("ix_eventos_acessado_em", "acessado_em"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    link_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("links.id", ondelete="CASCADE"), nullable=False
+    )
+    acessado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class ModeloSessao(Base):
     __tablename__ = "sessoes"
     __table_args__ = (

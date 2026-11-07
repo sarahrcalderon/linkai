@@ -18,7 +18,8 @@ def test_migracao_postgres_offline(monkeypatch):
     saida.seek(0)
     saida.truncate()
     assert "CREATE TABLE links" in sql
-    command.downgrade(configuracao, "0005:base", sql=True)
+    assert "CREATE TABLE eventos_acesso" in sql
+    command.downgrade(configuracao, "0006:base", sql=True)
     assert "DROP TABLE usuarios" in saida.getvalue()
     assert "DROP TABLE sessoes" in saida.getvalue()
 

@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { Aplicacao } from '../Aplicacao';
+import { fixtureEstatisticas } from './fixtureEstatisticas';
 import type { LinkPersonalizado } from '../funcionalidades/links/servico';
 
 const sessao = {
@@ -29,6 +30,7 @@ const resposta = (status: number, dados?: unknown) =>
 let itens: LinkPersonalizado[];
 async function api(url: RequestInfo | URL, opcoes?: RequestInit): Promise<Response> {
   const endereco = new URL(String(url));
+  if (endereco.pathname.includes('/estatisticas')) return resposta(200, fixtureEstatisticas());
   if (endereco.pathname.endsWith('/usuarios/me')) return resposta(200, sessao);
   if (endereco.pathname === '/api/links') {
     if (opcoes?.method === 'POST') {

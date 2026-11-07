@@ -1,0 +1,20 @@
+name: linkai-mailpit-local
+services:
+  mailpit:
+    image: axllent/mailpit:v1.33.0
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
+    environment:
+      MP_DATABASE: /data/mailpit.db
+      MP_MAX_MESSAGES: 100
+    volumes:
+      - mensagens-locais:/data
+    networks:
+      - captura-local
+networks:
+  captura-local:
+    internal: true
+volumes:
+  mensagens-locais:

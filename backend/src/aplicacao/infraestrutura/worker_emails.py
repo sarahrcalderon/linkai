@@ -6,25 +6,21 @@ import signal
 from aplicacao.casos_de_uso.processar_emails import ProcessarEmails
 from aplicacao.configuracao import Configuracao
 from aplicacao.infraestrutura.banco import BancoDados
-from aplicacao.infraestrutura.brevo.configuracao import ConfiguracaoBrevo
-from aplicacao.infraestrutura.brevo.fabrica import criar_envio_brevo
 from aplicacao.infraestrutura.cifra_outbox import CifraOutbox
+from aplicacao.infraestrutura.fabrica_envio import criar_servico_email
 from aplicacao.infraestrutura.repositorio_entregas import RepositorioEntregasSQLAlchemy
 
 
 async def executar_worker() -> None:
     configuracao = Configuracao()
     cifra = CifraOutbox(configuracao.outbox_chave)
-    configuracao_brevo = ConfiguracaoBrevo()
-    if configuracao.outbox_lease_segundos <= configuracao_brevo.tempo_total_segundos + 15:
-        raise ValueError("Prazo de posse deve superar o orçamento de envio com margem.")
     banco = BancoDados(configuracao)
     parar = asyncio.Event()
     loop = asyncio.get_running_loop()
     for sinal in (signal.SIGINT, signal.SIGTERM):
         signal.signal(sinal, lambda *_: loop.call_soon_threadsafe(parar.set))
     try:
-        async with criar_envio_brevo(configuracao_brevo) as envio:
+        async with criar_servico_email(configuracao) as envio:
             worker = ProcessarEmails(
                 RepositorioEntregasSQLAlchemy(banco, configuracao), cifra, envio
             )

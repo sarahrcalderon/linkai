@@ -9,7 +9,10 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react(), tailwindcss()],
     server: {
-      proxy: { '^/r/': { target: destinoAPI, changeOrigin: true, followRedirects: false } },
+      proxy: {
+        '^/api/': { target: destinoAPI, changeOrigin: true },
+        '^/r/': { target: destinoAPI, changeOrigin: true, followRedirects: false },
+      },
     },
     test: {
       environment: 'jsdom',

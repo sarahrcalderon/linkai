@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { fixtureEstatisticas } from '../src/testes/fixtureEstatisticas';
 
 const pasta = resolve(
   process.env.E2E_PASTA_EVIDENCIAS || '../docs/relatorios/evidencias/fase5/dashboard5.4',
@@ -16,6 +17,11 @@ const fixture = {
   atualizado_em: '2026-11-06T10:00:00Z',
 };
 async function simular(page: Page) {
+  await page.route('**/api/estatisticas/resumo?*', (rota) =>
+    rota.fulfill({
+      json: fixtureEstatisticas(Number(new URL(rota.request().url()).searchParams.get('dias'))),
+    }),
+  );
   await page.route('**/api/usuarios/me', (rota) =>
     rota.fulfill({
       json: {

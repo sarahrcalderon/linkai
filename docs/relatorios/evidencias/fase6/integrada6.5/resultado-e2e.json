@@ -1,0 +1,36 @@
+{
+  "resultado": "passed",
+  "duracaoMs": 62419.829,
+  "testes": [
+    {
+      "teste": "Analytics real: cadastro local, dashboard, três 302, SQL, concorrência e falha best effort",
+      "resultado": "passed",
+      "duracaoMs": 11392
+    },
+    {
+      "teste": "Analytics real: períodos UTC, estados, múltiplos links e usuários, SQL e segurança",
+      "resultado": "passed",
+      "duracaoMs": 16101
+    },
+    {
+      "teste": "Analytics real: dez layouts, temas, teclado, contraste, loading e erro de rede",
+      "resultado": "passed",
+      "duracaoMs": 5728
+    },
+    {
+      "teste": "integrado real: login, CRUD, PostgreSQL, clipboard e redirecionamento sem seguir destino",
+      "resultado": "passed",
+      "duracaoMs": 9040
+    },
+    {
+      "teste": "integrado real: paginação, ordenação, IDOR, CSRF, Origin, expiração e erros neutros",
+      "resultado": "passed",
+      "duracaoMs": 3298
+    },
+    {
+      "teste": "integrado real: UX, loading, erro e dez combinações responsivas com dados PostgreSQL",
+      "resultado": "passed",
+      "duracaoMs": 10765
+    }
+  ]
+}
